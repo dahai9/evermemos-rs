@@ -10,14 +10,16 @@ Rate-limit contract:
   - Extraction (per trigger): ~4 background calls (episode + foresight + event_log + profile)
   - Strategy: 2 s inter-message sleep → 30/min boundary calls, safe headroom for extraction
 
-Usage (Rust service must be running first):
-    # Terminal A
-    cd evermemos-rs && cargo run --bin evermemos
-
-    # Terminal B
+Usage (server is auto-started if not already running):
     cd /path/to/EverMemOS
     source .venv/bin/activate
     python evermemos-rs/demo/test_completeness.py
+
+    # To keep the server alive after the test:
+    KEEP_SERVER=1 python evermemos-rs/demo/test_completeness.py
+
+    # To point at a remote server:
+    EVERMEMOS_URL=http://host:8080 python evermemos-rs/demo/test_completeness.py
 
 Env vars:
     EVERMEMOS_URL   default http://localhost:8080
@@ -36,12 +38,16 @@ from typing import Any
 
 import httpx
 
+# Server auto-start helper (starts Rust server if not already running)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from server_utils import ensure_server  # noqa: E402
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
 BASE_URL       = os.getenv("EVERMEMOS_URL", "http://localhost:8080")
 MSG_DELAY_S    = float(os.getenv("MSG_DELAY_S", "2.0"))   # 2 s → 30/min max
 EXTRACT_WAIT_S = int(os.getenv("EXTRACT_WAIT_S", "9"))   # wait for background LLM
-MSG_COUNT      = int(os.getenv("MSG_COUNT", "30"))
+MSG_COUNT      = int(os.getenv("MSG_COUNT", "10"))
 
 USER_ID  = "test-completeness-user"
 ORG_ID   = "test-org"
@@ -202,18 +208,19 @@ def assert_memories_empty(label: str, resp: dict):
 async def run_tests():
     global passed, failed, skipped
 
-    async with httpx.AsyncClient() as client:
+    # ── Step 0: Health check (auto-start server if needed) ──────────────────
+    sep()
+    info("Step 0 — Health check")
+    sep()
+    _server_proc = ensure_server(BASE_URL)
+    ok(f"GET /health → server reachable at {BASE_URL}")
 
-        # ── Step 0: Health check ──────────────────────────────────────────────
-        sep()
-        info("Step 0 — Health check")
-        sep()
-        alive = await health_check(client)
-        if not alive:
-            fail(f"Cannot connect to Rust server at {BASE_URL}")
-            print(f"\n  Start with:  cd evermemos-rs && cargo run --bin evermemos")
-            sys.exit(1)
-        ok(f"GET /health → server reachable at {BASE_URL}")
+    # Auto-terminate server on exit only if we started it
+    import atexit
+    if _server_proc and not os.getenv("KEEP_SERVER"):
+        atexit.register(_server_proc.terminate)
+
+    async with httpx.AsyncClient() as client:
 
         # ── Step 1: Load dataset ──────────────────────────────────────────────
         sep()

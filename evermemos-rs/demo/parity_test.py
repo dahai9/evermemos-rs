@@ -25,13 +25,13 @@ Tests performed
 
 Usage
 -----
-  # terminal A – start Rust server
-  cd evermemos-rs && cargo run --bin evermemos
-
-  # terminal B – run parity test
+  # server is auto-started if not already running
   cd evermemos-rs
   source ../.venv/bin/activate   # or just use python from PATH
   python demo/parity_test.py [--url http://localhost:8080]
+
+  # keep server alive after test
+  KEEP_SERVER=1 python demo/parity_test.py
 """
 
 from __future__ import annotations
@@ -39,6 +39,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 from dataclasses import dataclass, field
@@ -46,6 +47,10 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
+# Server auto-start helper
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from server_utils import ensure_server  # noqa: E402
 
 # ──────────────────────────────────────────────────────────────────────────────
 DATA_FILE = Path(__file__).resolve().parents[2] / "data" / "assistant_chat_en.json"
@@ -508,6 +513,12 @@ def main():
     parser.add_argument("--url", default="http://localhost:8080",
                         help="Rust server base URL (default: http://localhost:8080)")
     args = parser.parse_args()
+
+    # Auto-start server if not running
+    _server_proc = ensure_server(args.url)
+    import atexit
+    if _server_proc and not os.getenv("KEEP_SERVER"):
+        atexit.register(_server_proc.terminate)
 
     results = asyncio.run(run(args.url))
     # Exit non-zero if any core test failed
