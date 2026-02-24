@@ -197,21 +197,15 @@ impl EpisodicMemoryRepo {
             .await
             .map_err(|e| anyhow::anyhow!("BM25 search failed: {e:#}"))?;
 
-        // Parse score from the supplementary field
-        #[derive(serde::Deserialize)]
-        struct Row {
-            #[serde(flatten)]
-            mem: EpisodicMemory,
-            #[serde(rename = "_score", default)]
-            score: f32,
-        }
-
-        let rows: Vec<Row> = resp.take(0)?;
-        Ok(rows
+        // Deserialize directly — avoids #[serde(flatten)] + Option<Thing> incompatibility.
+        // Score is not extracted from SQL; rank position serves as the relevance proxy.
+        let records: Vec<EpisodicMemory> = resp.take(0)?;
+        Ok(records
             .into_iter()
-            .map(|r| SearchResult {
-                item: r.mem,
-                score: r.score,
+            .enumerate()
+            .map(|(i, item)| SearchResult {
+                score: 1.0 / (1.0 + i as f32),
+                item,
             })
             .collect())
     }
@@ -247,7 +241,7 @@ impl EpisodicMemoryRepo {
             sql.push_str(" AND timestamp <= $end");
         }
         if radius.is_some() {
-            sql.push_str(" AND _score >= $radius");
+            sql.push_str(" AND vector::similarity::cosine(vector, $vec) >= $radius");
         }
 
         sql.push_str(" ORDER BY _score DESC LIMIT $limit");
@@ -276,20 +270,13 @@ impl EpisodicMemoryRepo {
 
         let mut resp = q.await.context("Vector search failed")?;
 
-        #[derive(serde::Deserialize)]
-        struct Row {
-            #[serde(flatten)]
-            mem: EpisodicMemory,
-            #[serde(rename = "_score", default)]
-            score: f32,
-        }
-
-        let rows: Vec<Row> = resp.take(0)?;
-        Ok(rows
+        let records: Vec<EpisodicMemory> = resp.take(0)?;
+        Ok(records
             .into_iter()
-            .map(|r| SearchResult {
-                item: r.mem,
-                score: r.score,
+            .enumerate()
+            .map(|(i, item)| SearchResult {
+                score: 1.0 / (1.0 + i as f32),
+                item,
             })
             .collect())
     }

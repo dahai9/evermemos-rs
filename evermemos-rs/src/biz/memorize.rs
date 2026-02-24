@@ -107,7 +107,10 @@ impl MemorizeService {
                         return Err(e);
                     }
                 };
-                cell = saved;
+                // Preserve the original in-memory cell content for extraction.
+                // The DB-returned MemCell may lose original_data through the
+                // SurrealDB CBOR round-trip.  Only copy back the DB-assigned id.
+                cell.id = saved.id;
 
                 info!("Memorize: MemCell saved, running parallel extraction");
 

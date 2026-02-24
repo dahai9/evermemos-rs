@@ -3,8 +3,8 @@ use surrealdb::engine::any::Any;
 use surrealdb::Surreal;
 use uuid::Uuid;
 
-use crate::storage::models::ForesightRecord;
 use super::{DateRange, SearchResult};
+use crate::storage::models::ForesightRecord;
 
 #[derive(Clone)]
 pub struct ForesightRepo {
@@ -48,29 +48,51 @@ impl ForesightRepo {
     ) -> Result<Vec<SearchResult<ForesightRecord>>> {
         let mut sql = String::from(
             "SELECT *, search::score(0) AS _score FROM foresight_record \
-             WHERE search_content @0@ $tokens AND is_deleted = false"
-             // search::score(0) — 0-indexed predicate,
+             WHERE search_content @0@ $tokens AND is_deleted = false",
         );
-        if user_id.is_some()  { sql.push_str(" AND user_id = $user_id"); }
-        if group_id.is_some() { sql.push_str(" AND group_id = $group_id"); }
-        if date_range.start.is_some() { sql.push_str(" AND timestamp >= $start"); }
-        if date_range.end.is_some()   { sql.push_str(" AND timestamp <= $end"); }
+        if user_id.is_some() {
+            sql.push_str(" AND user_id = $user_id");
+        }
+        if group_id.is_some() {
+            sql.push_str(" AND group_id = $group_id");
+        }
+        if date_range.start.is_some() {
+            sql.push_str(" AND timestamp >= $start");
+        }
+        if date_range.end.is_some() {
+            sql.push_str(" AND timestamp <= $end");
+        }
         sql.push_str(" ORDER BY _score DESC LIMIT $limit");
 
-        let mut q = self.db.query(sql)
+        let mut q = self
+            .db
+            .query(sql)
             .bind(("tokens", tokens.to_string()))
             .bind(("limit", limit));
-        if let Some(uid) = user_id  { q = q.bind(("user_id", uid.to_string())); }
-        if let Some(gid) = group_id { q = q.bind(("group_id", gid.to_string())); }
-        if let Some(s) = &date_range.start { q = q.bind(("start", *s)); }
-        if let Some(e) = &date_range.end   { q = q.bind(("end", *e)); }
+        if let Some(uid) = user_id {
+            q = q.bind(("user_id", uid.to_string()));
+        }
+        if let Some(gid) = group_id {
+            q = q.bind(("group_id", gid.to_string()));
+        }
+        if let Some(s) = &date_range.start {
+            q = q.bind(("start", *s));
+        }
+        if let Some(e) = &date_range.end {
+            q = q.bind(("end", *e));
+        }
 
         let mut resp = q.await.context("Foresight BM25 failed")?;
 
-        #[derive(serde::Deserialize)]
-        struct Row { #[serde(flatten)] rec: ForesightRecord, #[serde(rename="_score", default)] score: f32 }
-        let rows: Vec<Row> = resp.take(0)?;
-        Ok(rows.into_iter().map(|r| SearchResult { item: r.rec, score: r.score }).collect())
+        let records: Vec<ForesightRecord> = resp.take(0)?;
+        Ok(records
+            .into_iter()
+            .enumerate()
+            .map(|(i, item)| SearchResult {
+                score: 1.0 / (1.0 + i as f32),
+                item,
+            })
+            .collect())
     }
 
     pub async fn search_vector(
@@ -85,23 +107,48 @@ impl ForesightRepo {
             "SELECT *, vector::similarity::cosine(vector, $vec) AS _score \
              FROM foresight_record WHERE is_deleted = false AND vector IS NOT NONE",
         );
-        if user_id.is_some()  { sql.push_str(" AND user_id = $user_id"); }
-        if group_id.is_some() { sql.push_str(" AND group_id = $group_id"); }
-        if date_range.start.is_some() { sql.push_str(" AND timestamp >= $start"); }
-        if date_range.end.is_some()   { sql.push_str(" AND timestamp <= $end"); }
+        if user_id.is_some() {
+            sql.push_str(" AND user_id = $user_id");
+        }
+        if group_id.is_some() {
+            sql.push_str(" AND group_id = $group_id");
+        }
+        if date_range.start.is_some() {
+            sql.push_str(" AND timestamp >= $start");
+        }
+        if date_range.end.is_some() {
+            sql.push_str(" AND timestamp <= $end");
+        }
         sql.push_str(" ORDER BY _score DESC LIMIT $limit");
 
-        let mut q = self.db.query(sql).bind(("vec", query_vec.to_vec())).bind(("limit", limit));
-        if let Some(uid) = user_id  { q = q.bind(("user_id", uid.to_string())); }
-        if let Some(gid) = group_id { q = q.bind(("group_id", gid.to_string())); }
-        if let Some(s) = &date_range.start { q = q.bind(("start", *s)); }
-        if let Some(e) = &date_range.end   { q = q.bind(("end", *e)); }
+        let mut q = self
+            .db
+            .query(sql)
+            .bind(("vec", query_vec.to_vec()))
+            .bind(("limit", limit));
+        if let Some(uid) = user_id {
+            q = q.bind(("user_id", uid.to_string()));
+        }
+        if let Some(gid) = group_id {
+            q = q.bind(("group_id", gid.to_string()));
+        }
+        if let Some(s) = &date_range.start {
+            q = q.bind(("start", *s));
+        }
+        if let Some(e) = &date_range.end {
+            q = q.bind(("end", *e));
+        }
 
         let mut resp = q.await.context("Foresight vector search failed")?;
 
-        #[derive(serde::Deserialize)]
-        struct Row { #[serde(flatten)] rec: ForesightRecord, #[serde(rename="_score", default)] score: f32 }
-        let rows: Vec<Row> = resp.take(0)?;
-        Ok(rows.into_iter().map(|r| SearchResult { item: r.rec, score: r.score }).collect())
+        let records: Vec<ForesightRecord> = resp.take(0)?;
+        Ok(records
+            .into_iter()
+            .enumerate()
+            .map(|(i, item)| SearchResult {
+                score: 1.0 / (1.0 + i as f32),
+                item,
+            })
+            .collect())
     }
 }

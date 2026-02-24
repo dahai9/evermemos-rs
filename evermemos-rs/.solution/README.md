@@ -67,3 +67,4 @@ solution doc **通过 `--amend` 合并进它所记录的 commit**，永远不单
 |------|----------|
 | [9f7757f-init-init-version.md](./9f7757f-init-init-version.md) | Rust 重写全量初始化；6 个 SurrealDB runtime 坑的解法 |
 | [a602273-test-add-smoketest.md](./a602273-test-add-smoketest.md) | smoke_test.sh + simple_demo.py + lib.rs 拆分 |
+| [6743f7c-fix-evermemos-rs---search-sql-alias--extraction-original_data--test-history.md](./6743f7c-fix-evermemos-rs---search-sql-alias--extraction-original_data--test-history.md) | SurrealDB SQL alias 修复；original_data CBOR 保留；测试 history 累积 |
