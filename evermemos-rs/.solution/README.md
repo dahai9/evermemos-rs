@@ -18,6 +18,9 @@
 ```markdown
 # {hash} — {commit message}
 
+## 限制
+commit message 简短
+
 ## 背景
 为什么需要这次改动？解决什么问题？
 
@@ -69,3 +72,4 @@ solution doc **通过 `--amend` 合并进它所记录的 commit**，永远不单
 | [a602273-test-add-smoketest.md](./a602273-test-add-smoketest.md) | smoke_test.sh + simple_demo.py + lib.rs 拆分 |
 | [6743f7c-fix-evermemos-rs---search-sql-alias--extraction-original_data--test-history.md](./6743f7c-fix-evermemos-rs---search-sql-alias--extraction-original_data--test-history.md) | SurrealDB SQL alias 修复；original_data CBOR 保留；测试 history 累积 |
 | [45fe47b-feat-evermemos-rs---auto-start-server-in-test-scripts.md](./45fe47b-feat-evermemos-rs---auto-start-server-in-test-scripts.md) | 新增 server_utils.py；测试脚本自动启动/停止 Rust 服务，一条命令搞定 |
+| [0af07e8-feat-evermemos-rs--full-parity-21-21.md](./0af07e8-feat-evermemos-rs--full-parity-21-21.md) | conversation-meta/status/profile 三端点；BM25 查询词修复；seed assistant-mode；parity 21/21 |

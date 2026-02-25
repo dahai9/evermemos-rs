@@ -97,10 +97,10 @@ impl SearchMemoriesQuery {
     pub fn parse_method(&self) -> RetrieveMethod {
         match self.retrieve_method.as_deref().unwrap_or("VECTOR") {
             "KEYWORD" => RetrieveMethod::Keyword,
-            "HYBRID"  => RetrieveMethod::Hybrid,
-            "RRF"     => RetrieveMethod::Rrf,
+            "HYBRID" => RetrieveMethod::Hybrid,
+            "RRF" => RetrieveMethod::Rrf,
             "AGENTIC" => RetrieveMethod::Agentic,
-            _         => RetrieveMethod::Vector,
+            _ => RetrieveMethod::Vector,
         }
     }
 
@@ -113,7 +113,8 @@ impl SearchMemoriesQuery {
                     .map(|t| match t {
                         "foresight_record" | "FORESIGHT" => MemoryType::ForesightRecord,
                         "event_log_record" | "EVENT_LOG" => MemoryType::EventLogRecord,
-                        _                                => MemoryType::EpisodicMemory,
+                        "profile" | "PROFILE" => MemoryType::Profile,
+                        _ => MemoryType::EpisodicMemory,
                     })
                     .collect()
             })
@@ -143,4 +144,54 @@ pub struct DeleteMemoriesRequest {
 #[derive(Debug, Serialize)]
 pub struct DeleteMemoriesResponse {
     pub deleted_count: u64,
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// POST /api/v1/memories/conversation-meta
+// GET  /api/v1/memories/conversation-meta
+// ───────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ConversationMetaRequest {
+    pub group_id: Option<String>,
+    pub conv_id: Option<String>,
+    pub user_id: Option<String>,
+    pub scene: Option<String>,
+    pub name: Option<String>,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ConversationMetaQuery {
+    pub group_id: Option<String>,
+    pub conv_id: Option<String>,
+    pub user_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConversationMetaResponse {
+    pub conv_id: String,
+    pub group_id: Option<String>,
+    pub user_id: Option<String>,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// GET /api/v1/memories/status
+// ───────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct RequestStatusQuery {
+    pub request_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RequestStatusResponse {
+    pub request_id: String,
+    pub found: bool,
+    /// -1=pending, 0=processing, 1=done, -2=error
+    pub sync_status: Option<i32>,
+    pub status_label: String,
 }

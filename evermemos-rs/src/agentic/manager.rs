@@ -5,15 +5,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::debug;
 
+use super::{
+    prompts,
+    retrieval_utils::{reciprocal_rank_fusion, tokenise},
+};
 use crate::llm::provider::{complete_json, LlmMessage, LlmProvider};
 use crate::llm::rerank::RerankService;
 use crate::llm::vectorize::VectorizeService;
 use crate::storage::repository::{
-    DateRange, EpisodicMemoryRepo, EventLogRepo, ForesightRepo, SearchResult,
-};
-use super::{
-    prompts,
-    retrieval_utils::{reciprocal_rank_fusion, tokenise},
+    DateRange, EpisodicMemoryRepo, EventLogRepo, ForesightRepo, SearchResult, UserProfileRepo,
 };
 
 /// Retrieval method matching the Python `RetrieveMethod` enum.
@@ -34,6 +34,7 @@ pub enum MemoryType {
     EpisodicMemory,
     ForesightRecord,
     EventLogRecord,
+    Profile,
     All,
 }
 
@@ -77,6 +78,7 @@ pub struct AgenticManager {
     ep_repo: EpisodicMemoryRepo,
     fs_repo: ForesightRepo,
     el_repo: EventLogRepo,
+    up_repo: UserProfileRepo,
 }
 
 impl AgenticManager {
@@ -87,19 +89,31 @@ impl AgenticManager {
         ep_repo: EpisodicMemoryRepo,
         fs_repo: ForesightRepo,
         el_repo: EventLogRepo,
+        up_repo: UserProfileRepo,
     ) -> Self {
-        Self { llm, vectorizer, reranker, ep_repo, fs_repo, el_repo }
+        Self {
+            llm,
+            vectorizer,
+            reranker,
+            ep_repo,
+            fs_repo,
+            el_repo,
+            up_repo,
+        }
     }
 
     /// Main dispatch — select strategy and execute.
     pub async fn retrieve(&self, req: RetrieveRequest) -> Result<RetrieveResponse> {
-        debug!("AgenticManager::retrieve method={:?} query={}", req.method, req.query);
+        debug!(
+            "AgenticManager::retrieve method={:?} query={}",
+            req.method, req.query
+        );
 
         let items = match &req.method {
             RetrieveMethod::Keyword => self.keyword_search(&req).await?,
-            RetrieveMethod::Vector  => self.vector_search(&req).await?,
-            RetrieveMethod::Hybrid  => self.hybrid_search(&req, true).await?,
-            RetrieveMethod::Rrf     => self.rrf_search(&req).await?,
+            RetrieveMethod::Vector => self.vector_search(&req).await?,
+            RetrieveMethod::Hybrid => self.hybrid_search(&req, true).await?,
+            RetrieveMethod::Rrf => self.rrf_search(&req).await?,
             RetrieveMethod::Agentic => self.agentic_search(&req).await?,
         };
 
@@ -123,27 +137,41 @@ impl AgenticManager {
         for mt in &req.memory_types {
             match mt {
                 MemoryType::EpisodicMemory | MemoryType::All => {
-                    let results = self.ep_repo
+                    let results = self
+                        .ep_repo
                         .search_bm25(&tokens, uid, gid, req.top_k, &date_range)
                         .await?;
                     items.extend(results.into_iter().map(|r| ep_to_item(r)));
                 }
                 MemoryType::ForesightRecord => {
-                    let results = self.fs_repo
+                    let results = self
+                        .fs_repo
                         .search_bm25(&tokens, uid, gid, req.top_k, &date_range)
                         .await?;
                     items.extend(results.into_iter().map(|r| fs_to_item(r)));
                 }
                 MemoryType::EventLogRecord => {
-                    let results = self.el_repo
+                    let results = self
+                        .el_repo
                         .search_bm25(&tokens, uid, gid, req.top_k, &date_range)
                         .await?;
                     items.extend(results.into_iter().map(|r| el_to_item(r)));
                 }
+                MemoryType::Profile => {
+                    if let Some(uid_str) = uid {
+                        if let Ok(Some(profile)) = self.up_repo.get_by_user_id(uid_str).await {
+                            items.push(up_to_item(profile));
+                        }
+                    }
+                }
             }
         }
 
-        items.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        items.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         items.truncate(req.top_k as usize);
         Ok(items)
     }
@@ -160,38 +188,54 @@ impl AgenticManager {
         for mt in &req.memory_types {
             match mt {
                 MemoryType::EpisodicMemory | MemoryType::All => {
-                    let results = self.ep_repo
+                    let results = self
+                        .ep_repo
                         .search_vector(&vec, uid, gid, req.top_k, req.radius, &date_range)
                         .await?;
                     items.extend(results.into_iter().map(|r| ep_to_item(r)));
                 }
                 MemoryType::ForesightRecord => {
-                    let results = self.fs_repo
+                    let results = self
+                        .fs_repo
                         .search_vector(&vec, uid, gid, req.top_k, &date_range)
                         .await?;
                     items.extend(results.into_iter().map(|r| fs_to_item(r)));
                 }
                 MemoryType::EventLogRecord => {
-                    let results = self.el_repo
+                    let results = self
+                        .el_repo
                         .search_vector(&vec, uid, gid, req.top_k, &date_range)
                         .await?;
                     items.extend(results.into_iter().map(|r| el_to_item(r)));
                 }
+                MemoryType::Profile => {
+                    if let Some(uid_str) = uid {
+                        if let Ok(Some(profile)) = self.up_repo.get_by_user_id(uid_str).await {
+                            items.push(up_to_item(profile));
+                        }
+                    }
+                }
             }
         }
 
-        items.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        items.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         items.truncate(req.top_k as usize);
         Ok(items)
     }
 
     // ── HYBRID (keyword + vector + rerank) ────────────────────────────────────
 
-    async fn hybrid_search(&self, req: &RetrieveRequest, do_rerank: bool) -> Result<Vec<MemoryItem>> {
-        let (kw_items, vec_items) = tokio::join!(
-            self.keyword_search(req),
-            self.vector_search(req),
-        );
+    async fn hybrid_search(
+        &self,
+        req: &RetrieveRequest,
+        do_rerank: bool,
+    ) -> Result<Vec<MemoryItem>> {
+        let (kw_items, vec_items) =
+            tokio::join!(self.keyword_search(req), self.vector_search(req),);
         let mut merged = merge_dedup(kw_items?, vec_items?);
 
         if do_rerank && self.reranker.is_enabled() && !merged.is_empty() {
@@ -201,7 +245,11 @@ impl AgenticManager {
                     for (item, score) in merged.iter_mut().zip(scores.iter()) {
                         item.score = *score;
                     }
-                    merged.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+                    merged.sort_by(|a, b| {
+                        b.score
+                            .partial_cmp(&a.score)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
                 }
                 Err(e) => {
                     tracing::warn!("Rerank failed, using pre-rerank order: {e}");
@@ -216,12 +264,16 @@ impl AgenticManager {
     // ── RRF (Reciprocal Rank Fusion, no reranker) ─────────────────────────────
 
     async fn rrf_search(&self, req: &RetrieveRequest) -> Result<Vec<MemoryItem>> {
-        let (kw_items, vec_items) = tokio::join!(
-            self.keyword_search(req),
-            self.vector_search(req),
-        );
-        let kw = kw_items?.into_iter().map(|i| (i.id.clone(), i)).collect::<Vec<_>>();
-        let vc = vec_items?.into_iter().map(|i| (i.id.clone(), i)).collect::<Vec<_>>();
+        let (kw_items, vec_items) =
+            tokio::join!(self.keyword_search(req), self.vector_search(req),);
+        let kw = kw_items?
+            .into_iter()
+            .map(|i| (i.id.clone(), i))
+            .collect::<Vec<_>>();
+        let vc = vec_items?
+            .into_iter()
+            .map(|i| (i.id.clone(), i))
+            .collect::<Vec<_>>();
 
         let rrf_scores = reciprocal_rank_fusion(vec![kw.clone(), vc.clone()], 60.0);
 
@@ -234,7 +286,10 @@ impl AgenticManager {
         let mut result: Vec<MemoryItem> = rrf_scores
             .into_iter()
             .filter_map(|(id, score)| {
-                item_map.remove(&id).map(|mut item| { item.score = score; item })
+                item_map.remove(&id).map(|mut item| {
+                    item.score = score;
+                    item
+                })
             })
             .collect();
 
@@ -316,7 +371,11 @@ impl AgenticManager {
         let sub_reqs: Vec<RetrieveRequest> = refined_queries
             .iter()
             .take(3)
-            .map(|rq| RetrieveRequest { query: rq.clone(), top_k: 50, ..req.clone() })
+            .map(|rq| RetrieveRequest {
+                query: rq.clone(),
+                top_k: 50,
+                ..req.clone()
+            })
             .collect();
 
         let mut all_items: Vec<MemoryItem> = round1;
@@ -338,7 +397,11 @@ impl AgenticManager {
             }
         }
 
-        merged.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        merged.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         merged.truncate(req.top_k as usize);
         Ok(merged)
     }
@@ -390,6 +453,28 @@ fn el_to_item(r: SearchResult<crate::storage::models::EventLogRecord>) -> Memory
         score: r.score,
         timestamp: Some(r.item.timestamp),
         metadata: serde_json::Value::Null,
+    }
+}
+
+fn up_to_item(profile: crate::storage::models::UserProfile) -> MemoryItem {
+    let id = profile.id.as_ref().map(|t| t.to_raw()).unwrap_or_default();
+    let content = profile.life_summary.clone().unwrap_or_else(|| {
+        profile
+            .profile_data
+            .as_ref()
+            .map(|v| v.to_string())
+            .unwrap_or_default()
+    });
+    MemoryItem {
+        id,
+        memory_type: "profile".into(),
+        content,
+        score: 1.0,
+        timestamp: profile.created_at,
+        metadata: serde_json::json!({
+            "user_id": profile.user_id,
+            "profile_data": profile.profile_data,
+        }),
     }
 }
 

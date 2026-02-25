@@ -1,0 +1,98 @@
+# evermemos-rs justfile
+# Usage: just <recipe>    (run `just --list` to see all)
+
+# Default: show available recipes
+default:
+    @just --list
+
+# ── Build ─────────────────────────────────────────────────────────────────────
+
+# Compile (debug)
+build:
+    cargo build --bin evermemos
+
+# Compile (release, optimised)
+build-release:
+    cargo build --release --bin evermemos
+
+# Fast type-check without producing a binary
+check:
+    cargo check
+
+# Format source code
+fmt:
+    cargo fmt
+
+# Run clippy linter
+lint:
+    cargo clippy -- -D warnings
+
+# ── Server ────────────────────────────────────────────────────────────────────
+
+LOG := "/tmp/evermemos.log"
+
+# Build (debug) then start the server in the foreground
+serve:
+    cargo run --bin evermemos
+
+# Start server in the background (health-check is handled by server_utils.py in test scripts)
+start:
+    #!/usr/bin/env bash
+    echo "Starting evermemos-rs → log: {{LOG}}"
+    cargo run --bin evermemos > {{LOG}} 2>&1 &
+    echo "PID: $!"
+
+# Kill any running evermemos server
+stop:
+    @pkill -f "debug/evermemos" && echo "stopped" || echo "not running"
+
+# Restart server (stop → start)
+restart: stop start
+
+# Tail server logs
+logs:
+    tail -f {{LOG}}
+
+# Watch for source changes and auto-rebuild (cargo-watch)
+watch:
+    cargo watch -x "build --bin evermemos"
+
+# Watch and auto-restart server on changes
+watch-serve:
+    cargo watch -x "run --bin evermemos"
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+
+DEMO := "demo"
+
+# Run the feature-completeness test suite
+test-completeness:
+    python {{DEMO}}/test_completeness.py
+
+# Run the Python↔Rust parity test suite
+test-parity:
+    python {{DEMO}}/parity_test.py
+
+# Run all demo tests
+test: test-completeness test-parity
+
+# Run cargo unit tests
+unit-test:
+    cargo test
+
+# ── Maintenance ───────────────────────────────────────────────────────────────
+
+# Remove build artefacts
+clean:
+    cargo clean
+
+# Delete server logfile
+clean-log:
+    rm -f {{LOG}}
+
+# Delete the SurrealDB data directory (wipes all stored memories)
+clean-data:
+    rm -rf data/surreal
+
+# Full clean: build + data + log
+clean-all: clean clean-data clean-log

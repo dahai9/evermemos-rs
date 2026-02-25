@@ -8,14 +8,16 @@ use tracing::info;
 
 use crate::agentic::manager::{AgenticManager, RetrieveRequest};
 use crate::api::dto::{
-    ApiResponse, DeleteMemoriesRequest, DeleteMemoriesResponse, FetchMemoriesQuery,
-    FetchMemoriesResponse, MemorizeMessageRequest, MemorizeResponse, SearchMemoriesQuery,
-    SearchMemoriesResponse,
+    ApiResponse, ConversationMetaQuery, ConversationMetaRequest, ConversationMetaResponse,
+    DeleteMemoriesRequest, DeleteMemoriesResponse, FetchMemoriesQuery,
+    FetchMemoriesResponse, MemorizeMessageRequest, MemorizeResponse, RequestStatusQuery,
+    RequestStatusResponse, SearchMemoriesQuery, SearchMemoriesResponse,
 };
 use crate::biz::memorize::{MemorizeRequest, MemorizeService, RawMessage};
 use crate::core::error::AppError;
 use crate::core::tenant::TenantContext;
-use crate::storage::repository::{DateRange, EpisodicMemoryRepo};
+use crate::storage::models::ConversationMeta;
+use crate::storage::repository::{ConversationMetaRepo, DateRange, EpisodicMemoryRepo, MemoryRequestLogRepo};
 
 /// Shared application state injected into every route handler.
 #[derive(Clone)]
@@ -23,6 +25,8 @@ pub struct AppState {
     pub memorize_svc: Arc<MemorizeService>,
     pub agentic: Arc<AgenticManager>,
     pub ep_repo: EpisodicMemoryRepo,
+    pub conv_meta_repo: ConversationMetaRepo,
+    pub req_log_repo: MemoryRequestLogRepo,
 }
 
 pub fn memory_routes(state: AppState) -> Router {
@@ -34,6 +38,11 @@ pub fn memory_routes(state: AppState) -> Router {
                 .delete(delete_handler),
         )
         .route("/api/v1/memories/search", get(search_handler))
+        .route(
+            "/api/v1/memories/conversation-meta",
+            post(conv_meta_upsert_handler).get(conv_meta_get_handler),
+        )
+        .route("/api/v1/memories/status", get(request_status_handler))
         .with_state(state)
 }
 
@@ -196,6 +205,123 @@ async fn delete_handler(
         "Memories deleted",
         DeleteMemoriesResponse {
             deleted_count: count,
+        },
+    )))
+}
+
+// ── POST /api/v1/memories/conversation-meta ───────────────────────────────────
+
+async fn conv_meta_upsert_handler(
+    State(state): State<AppState>,
+    Extension(_tenant): Extension<TenantContext>,
+    Json(body): Json<ConversationMetaRequest>,
+) -> Result<Json<ApiResponse<ConversationMetaResponse>>, AppError> {
+    let conv_id = body.conv_id.clone().or_else(|| body.group_id.clone()).unwrap_or_default();
+    let meta = ConversationMeta {
+        id: None,
+        conv_id: conv_id.clone(),
+        user_id: body.user_id.clone(),
+        group_id: body.group_id.clone(),
+        title: body.title.clone().or_else(|| body.name.clone()),
+        summary: body.summary.clone(),
+        created_at: None,
+        updated_at: None,
+    };
+
+    let saved = if body.group_id.is_some() {
+        state
+            .conv_meta_repo
+            .upsert_by_group_id(meta)
+            .await
+            .map_err(|e| AppError::Internal(e))?
+    } else {
+        state
+            .conv_meta_repo
+            .upsert(meta)
+            .await
+            .map_err(|e| AppError::Internal(e))?
+    };
+
+    Ok(Json(ApiResponse::ok(
+        "Conversation meta saved",
+        ConversationMetaResponse {
+            conv_id: saved.conv_id,
+            group_id: saved.group_id,
+            user_id: saved.user_id,
+            title: saved.title,
+            summary: saved.summary,
+        },
+    )))
+}
+
+// ── GET /api/v1/memories/conversation-meta ────────────────────────────────────
+
+async fn conv_meta_get_handler(
+    State(state): State<AppState>,
+    Extension(_tenant): Extension<TenantContext>,
+    Query(q): Query<ConversationMetaQuery>,
+) -> Result<Json<ApiResponse<Option<ConversationMetaResponse>>>, AppError> {
+    let meta = if let Some(gid) = q.group_id.as_deref() {
+        state
+            .conv_meta_repo
+            .get_by_group_id(gid)
+            .await
+            .map_err(|e| AppError::Internal(e))?
+    } else if let Some(cid) = q.conv_id.as_deref() {
+        state
+            .conv_meta_repo
+            .get(cid)
+            .await
+            .map_err(|e| AppError::Internal(e))?
+    } else {
+        None
+    };
+
+    let resp = meta.map(|m| ConversationMetaResponse {
+        conv_id: m.conv_id,
+        group_id: m.group_id,
+        user_id: m.user_id,
+        title: m.title,
+        summary: m.summary,
+    });
+
+    Ok(Json(ApiResponse::ok("Conversation meta retrieved", resp)))
+}
+
+// ── GET /api/v1/memories/status ───────────────────────────────────────────────
+
+async fn request_status_handler(
+    State(state): State<AppState>,
+    Extension(_tenant): Extension<TenantContext>,
+    Query(q): Query<RequestStatusQuery>,
+) -> Result<Json<ApiResponse<RequestStatusResponse>>, AppError> {
+    let log = state
+        .req_log_repo
+        .get_by_message_id(&q.request_id)
+        .await
+        .map_err(|e| AppError::Internal(e))?;
+
+    let (found, sync_status, label) = match log {
+        Some(entry) => {
+            let label = match entry.sync_status {
+                -1 => "pending",
+                0  => "processing",
+                1  => "done",
+                -2 => "error",
+                _  => "unknown",
+            };
+            (true, Some(entry.sync_status), label.to_string())
+        }
+        None => (false, None, "not_found".to_string()),
+    };
+
+    Ok(Json(ApiResponse::ok(
+        "Request status retrieved",
+        RequestStatusResponse {
+            request_id: q.request_id,
+            found,
+            sync_status,
+            status_label: label,
         },
     )))
 }

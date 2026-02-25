@@ -47,4 +47,38 @@ impl ConversationMetaRepo {
             created.context("Insert returned no record")
         }
     }
+
+    pub async fn get_by_group_id(&self, group_id: &str) -> Result<Option<ConversationMeta>> {
+        let mut resp = self
+            .db
+            .query("SELECT * FROM conversation_meta WHERE group_id = $gid LIMIT 1")
+            .bind(("gid", group_id.to_string()))
+            .await
+            .context("ConversationMetaRepo::get_by_group_id failed")?;
+        let rows: Vec<ConversationMeta> = resp.take(0)?;
+        Ok(rows.into_iter().next())
+    }
+
+    pub async fn upsert_by_group_id(&self, meta: ConversationMeta) -> Result<ConversationMeta> {
+        let group_id = meta.group_id.clone().context("group_id is required")?;
+        let existing = self.get_by_group_id(&group_id).await?;
+        if let Some(ex) = existing {
+            let id = ex.id.as_ref().map(|t| t.id.to_raw()).unwrap_or_default();
+            let updated: Option<ConversationMeta> = self
+                .db
+                .update(("conversation_meta", id))
+                .merge(meta)
+                .await
+                .context("ConversationMeta update by group_id failed")?;
+            updated.context("Update returned no record")
+        } else {
+            let created: Option<ConversationMeta> = self
+                .db
+                .create("conversation_meta")
+                .content(meta)
+                .await
+                .context("ConversationMeta insert by group_id failed")?;
+            created.context("Insert returned no record")
+        }
+    }
 }

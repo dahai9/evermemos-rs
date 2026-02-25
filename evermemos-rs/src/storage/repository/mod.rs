@@ -4,6 +4,7 @@ pub mod episodic_memory;
 pub mod event_log;
 pub mod foresight;
 pub mod memcell;
+pub mod request_log;
 pub mod user_profile;
 
 pub use cluster_state::ClusterStateRepo;
@@ -12,6 +13,7 @@ pub use episodic_memory::EpisodicMemoryRepo;
 pub use event_log::EventLogRepo;
 pub use foresight::ForesightRepo;
 pub use memcell::MemCellRepo;
+pub use request_log::MemoryRequestLogRepo;
 pub use user_profile::UserProfileRepo;
 
 use chrono::{DateTime, Utc};

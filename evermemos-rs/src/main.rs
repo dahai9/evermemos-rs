@@ -23,7 +23,7 @@ use evermemos_rs::storage::{
     db,
     repository::{
         ClusterStateRepo, ConversationMetaRepo, EpisodicMemoryRepo, EventLogRepo,
-        ForesightRepo, MemCellRepo, UserProfileRepo,
+        ForesightRepo, MemCellRepo, MemoryRequestLogRepo, UserProfileRepo,
     },
 };
 
@@ -47,7 +47,8 @@ async fn main() -> anyhow::Result<()> {
     let mc_repo       = MemCellRepo::new(db.clone());
     let up_repo       = UserProfileRepo::new(db.clone());
     let _cs_repo      = ClusterStateRepo::new(db.clone());
-    let _cm_repo      = ConversationMetaRepo::new(db.clone());
+    let cm_repo       = ConversationMetaRepo::new(db.clone());
+    let req_log_repo  = MemoryRequestLogRepo::new(db.clone());
 
     // ── 5. Caches ─────────────────────────────────────────────────────────────
     let caches = Caches::new();
@@ -92,6 +93,7 @@ async fn main() -> anyhow::Result<()> {
         ep_repo.clone(),
         fs_repo.clone(),
         el_repo.clone(),
+        up_repo.clone(),
     ));
 
     // ── 9. Optional NATS worker (fire-and-forget) ─────────────────────────────
@@ -113,6 +115,8 @@ async fn main() -> anyhow::Result<()> {
         memorize_svc,
         agentic,
         ep_repo,
+        conv_meta_repo: cm_repo,
+        req_log_repo,
     };
 
     // Capture config values to use inside middleware closures

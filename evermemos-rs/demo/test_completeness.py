@@ -47,9 +47,10 @@ from server_utils import ensure_server  # noqa: E402
 BASE_URL       = os.getenv("EVERMEMOS_URL", "http://localhost:8080")
 MSG_DELAY_S    = float(os.getenv("MSG_DELAY_S", "2.0"))   # 2 s → 30/min max
 EXTRACT_WAIT_S = int(os.getenv("EXTRACT_WAIT_S", "9"))   # wait for background LLM
-MSG_COUNT      = int(os.getenv("MSG_COUNT", "10"))
+MSG_COUNT      = int(os.getenv("MSG_COUNT", "30"))
 
 USER_ID  = "test-completeness-user"
+GROUP_ID = "test-completeness-group"
 ORG_ID   = "test-org"
 HEADERS  = {"X-Organization-Id": ORG_ID, "Content-Type": "application/json"}
 
@@ -436,6 +437,52 @@ async def run_tests():
         info("Step 10 — Feature parity vs Python implementation")
         sep()
 
+        # ── Live checks for formerly-missing features ─────────────────────────
+        _conv_ok = False
+        try:
+            r = await client.post(
+                f"{BASE_URL}/api/v1/memories/conversation-meta",
+                headers=HEADERS,
+                json={"group_id": GROUP_ID, "scene": "assistant", "name": "test-conv"},
+                timeout=10,
+            )
+            if r.status_code != 404:
+                r2 = await client.get(
+                    f"{BASE_URL}/api/v1/memories/conversation-meta",
+                    headers=HEADERS,
+                    params={"group_id": GROUP_ID},
+                    timeout=10,
+                )
+                _conv_ok = r2.status_code != 404
+        except Exception:
+            pass
+
+        _status_ok = False
+        try:
+            r = await client.get(
+                f"{BASE_URL}/api/v1/memories/status",
+                headers=HEADERS,
+                params={"request_id": "dummy-check"},
+                timeout=10,
+            )
+            _status_ok = r.status_code != 404
+        except Exception:
+            pass
+
+        _profile_ok = False
+        try:
+            r = await client.get(
+                f"{BASE_URL}/api/v1/memories/search",
+                headers=HEADERS,
+                params={"query": "user preference", "user_id": USER_ID,
+                        "retrieve_method": "KEYWORD", "memory_types": "profile", "top_k": 3},
+                timeout=30,
+            )
+            if r.status_code == 200:
+                _profile_ok = len(r.json().get("result", {}).get("memories", [])) > 0
+        except Exception:
+            pass
+
         feature_checks = [
             ("POST /api/v1/memories",                 True),   # tested in Step 3
             ("GET  /api/v1/memories (fetch)",          True),   # tested in Step 5
@@ -448,11 +495,10 @@ async def run_tests():
             ("Episode extraction (LLM stage 3)",       type_coverage.get("episodic memory", False)),
             ("Foresight extraction",                   type_coverage.get("foresight", False)),
             ("Event log extraction",                   type_coverage.get("event log", False)),
-            ("GET  /health",                          True),
-            # Python has these — Rust does NOT yet
-            ("conversation-meta API  [Python only]",  None),
-            ("Request status polling [Python only]",  None),
-            ("Profile memory type    [Python only]",  None),
+            ("GET  /health",                           True),
+            ("conversation-meta API  (POST+GET)",      _conv_ok),
+            ("Request status polling (GET /status)",   _status_ok),
+            ("Profile memory type    (search)",        _profile_ok),
         ]
 
         print()

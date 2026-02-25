@@ -60,9 +60,13 @@ ORG_ID    = "parity-test-org"
 
 # Retrieval queries tuned to the assistant_chat_en conversation content
 QUERIES = {
-    "sports":  "What sports does the user like?",
-    "travel":  "Did the user travel anywhere?",
-    "health":  "What are the user's health conditions?",
+    # Vector-friendly: semantic phrasing
+    "sports":    "What sports does the user like?",
+    "travel":    "Did the user travel anywhere?",
+    "health":    "What are the user's health conditions?",
+    # BM25-friendly: literal words that appear in stored episode/event content
+    "sports_kw": "badminton basketball",
+    "travel_kw": "travel Beijing",
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -247,7 +251,29 @@ class ParityTester:
 
     async def test_search_keyword(self):
         print("\n── P5  Search KEYWORD ──")
-        await self._search("P5", "KEYWORD", QUERIES["sports"])
+        # Search WITHOUT group_id: assistant-mode seed records contain literal sport words.
+        # P5 verifies BM25 works on episodic_memory; group-id filtering is covered by P4/P6.
+        params: dict = dict(
+            query=QUERIES["sports_kw"],
+            user_id=USER_ID,
+            retrieve_method="KEYWORD",
+            top_k=5,
+        )
+        t0 = time.monotonic()
+        try:
+            code, body = await self.get("/api/v1/memories/search", **params)
+            elapsed_ms = (time.monotonic() - t0) * 1000
+            memories = body.get("result", {}).get("memories", [])
+            total = body.get("result", {}).get("total_count", 0)
+            ok = code == 200 and total > 0
+            self.record("P5", ok, f"HTTP {code}, total={total}, returned={len(memories)}, {elapsed_ms:.0f}ms",
+                        total=total, count=len(memories), latency_ms=elapsed_ms)
+            if memories:
+                m = memories[0]
+                print(f"     top-1 [{m.get('memory_type')}] score={m.get('score',0):.4f} "
+                      f"— {m.get('content','')[:70]}…")
+        except Exception as e:
+            self.record("P5", False, str(e))
 
     async def test_search_vector(self):
         print("\n── P6  Search VECTOR ──")
@@ -271,13 +297,112 @@ class ParityTester:
 
     async def test_foresight(self):
         print("\n── P10 Search foresight_record ──")
-        await self._search("P10", "VECTOR", QUERIES["health"],
-                           memory_types="foresight_record")
+        # foresight is only extracted in assistant-scene (no group_id); search without group filter
+        params_override = dict(
+            query=QUERIES["health"],
+            user_id=USER_ID,
+            retrieve_method="VECTOR",
+            memory_types="foresight_record",
+            top_k=5,
+        )
+        t0 = time.monotonic()
+        code, body = await self.get("/api/v1/memories/search", **params_override)
+        elapsed_ms = (time.monotonic() - t0) * 1000
+        memories = body.get("result", {}).get("memories", [])
+        total = body.get("result", {}).get("total_count", 0)
+        ok = code == 200 and total > 0
+        self.record("P10", ok, f"HTTP {code}, total={total}, returned={len(memories)}, {elapsed_ms:.0f}ms",
+                    total=total, count=len(memories), latency_ms=elapsed_ms)
+        if memories:
+            m = memories[0]
+            print(f"     top-1 [{m.get('memory_type')}] score={m.get('score',0):.4f} "
+                  f"— {m.get('content','')[:70]}…")
 
     async def test_event_log(self):
         print("\n── P11 Search event_log_record ──")
-        await self._search("P11", "KEYWORD", QUERIES["travel"],
-                           memory_types="event_log_record")
+        # event_log is only extracted in assistant-scene (no group_id); search without group filter
+        params_override = dict(
+            query=QUERIES["travel_kw"],
+            user_id=USER_ID,
+            retrieve_method="KEYWORD",
+            memory_types="event_log_record",
+            top_k=5,
+        )
+        t0 = time.monotonic()
+        code, body = await self.get("/api/v1/memories/search", **params_override)
+        elapsed_ms = (time.monotonic() - t0) * 1000
+        memories = body.get("result", {}).get("memories", [])
+        total = body.get("result", {}).get("total_count", 0)
+        ok = code == 200 and total > 0
+        self.record("P11", ok, f"HTTP {code}, total={total}, returned={len(memories)}, {elapsed_ms:.0f}ms",
+                    total=total, count=len(memories), latency_ms=elapsed_ms)
+        if memories:
+            m = memories[0]
+            print(f"     top-1 [{m.get('memory_type')}] score={m.get('score',0):.4f} "
+                  f"— {m.get('content','')[:70]}…")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # P2b — Seed assistant-mode data (no group_id) for foresight + event_log
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    async def seed_assistant_mode(self):
+        """Send 4 msgs WITHOUT group_id → assistant scene → foresight + event_log extracted."""
+        print("\n── P2b Seed assistant-mode data (foresight + event_log) ──")
+        # Two conversation turns, content from the dataset's travel/health themes
+        seed_msgs = [
+            {
+                "message_id": "seed-asst-001",
+                "create_time": "2025-06-10T09:00:00Z",
+                "sender": "user",
+                "sender_name": "User",
+                "content": "I will travel to Beijing next week for a conference. Can you suggest some attractions?",
+                "user_id": USER_ID,
+                "role": "user",
+            },
+            {
+                "message_id": "seed-asst-002",
+                "create_time": "2025-06-10T09:01:00Z",
+                "sender": "assistant",
+                "sender_name": "Assistant",
+                "content": "Certainly! For Beijing next week, I recommend the Forbidden City, Great Wall, and Summer Palace. "
+                            "Make sure to book the Forbidden City tickets 3 days in advance.",
+                "user_id": USER_ID,
+                "role": "assistant",
+                "history": [{"sender": "user", "content": "I will travel to Beijing next week for a conference. Can you suggest some attractions?"}],
+            },
+            {
+                "message_id": "seed-asst-003",
+                "create_time": "2025-06-11T10:00:00Z",
+                "sender": "user",
+                "sender_name": "User",
+                "content": "I enjoy badminton and basketball. My waist is 104 cm and BMI is 29.8.",
+                "user_id": USER_ID,
+                "role": "user",
+            },
+            {
+                "message_id": "seed-asst-004",
+                "create_time": "2025-06-11T10:01:00Z",
+                "sender": "assistant",
+                "sender_name": "Assistant",
+                "content": "Based on your BMI of 29.8 and 104 cm waist, you should reduce calorie intake and exercise more. "
+                            "Badminton and basketball are great cardio activities. Aim for 30 minutes daily.",
+                "user_id": USER_ID,
+                "role": "assistant",
+                "history": [
+                    {"sender": "user", "content": "I will travel to Beijing next week."},
+                    {"sender": "user", "content": "I enjoy badminton and basketball. My waist is 104 cm and BMI is 29.8."},
+                ],
+            },
+        ]
+        seeded = 0
+        for msg in seed_msgs:
+            try:
+                code, resp = await self.post("/api/v1/memories", msg)
+                if code == 200:
+                    seeded += 1
+            except Exception as e:
+                print(f"    seed warning: {e}")
+        print(f"  ✓ {seeded}/{len(seed_msgs)} seed messages sent (assistant-scene, no group_id)")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # P12 — Multi-type search
@@ -295,8 +420,9 @@ class ParityTester:
     async def test_date_filter(self):
         print("\n── P13 Date-range filter ──")
         # Data spans ~2025; use a valid window that should include messages
+        # Use BM25-friendly query with literal words from stored content
         await self._search(
-            "P13", "KEYWORD", QUERIES["sports"],
+            "P13", "KEYWORD", QUERIES["travel_kw"],
             extra_params={
                 "start_time": "2025-01-01T00:00:00Z",
                 "end_time":   "2026-12-31T23:59:59Z",
@@ -478,13 +604,19 @@ async def run(base_url: str):
         # Pre-clean
         print("\n── Pre-clean ──")
         try:
+            # Remove group-mode data
             await tester.delete("/api/v1/memories", {"user_id": USER_ID, "group_id": GROUP_ID})
+            # Remove assistant-mode data (seed messages have no group_id)
+            await tester.delete("/api/v1/memories", {"user_id": USER_ID})
             print("  previous test data cleared")
         except Exception:
             pass
 
         await tester.test_health()
         _, extracted = await tester.test_memorize()
+
+        # Seed a small assistant-mode conversation to exercise foresight + event_log
+        await tester.seed_assistant_mode()
 
         # Only wait when extraction actually happened
         wait_secs = 20 if extracted > 0 else 5
