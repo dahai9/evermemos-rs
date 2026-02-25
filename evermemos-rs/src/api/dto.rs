@@ -195,3 +195,47 @@ pub struct RequestStatusResponse {
     pub sync_status: Option<i32>,
     pub status_label: String,
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// PATCH /api/v1/memories/conversation-meta
+// ────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ConversationMetaPatchBody {
+    pub group_id: Option<String>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub scene_desc: Option<serde_json::Value>,
+    pub tags: Option<Vec<String>>,
+    pub user_details: Option<serde_json::Value>,
+    pub default_timezone: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConversationMetaPatchResponse {
+    pub group_id: Option<String>,
+    pub updated_fields: Vec<String>,
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /api/v1/global-user-profile/custom
+// ────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct CustomProfileData {
+    pub initial_profile: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpsertCustomProfileRequest {
+    pub user_id: String,
+    pub custom_profile_data: CustomProfileData,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UpsertCustomProfileResponse {
+    pub success: bool,
+    pub user_id: String,
+    pub message: Option<String>,
+}
+

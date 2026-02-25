@@ -3,8 +3,9 @@ use tracing::info;
 
 use evermemos_rs::agentic::manager::AgenticManager;
 use evermemos_rs::api::{
-    health_routes, memory_routes,
+    health_routes, memory_routes, global_profile_routes,
     memory_router::AppState,
+    global_profile_router::GlobalProfileState,
 };
 use evermemos_rs::biz::memorize::MemorizeService;
 use evermemos_rs::config::AppConfig;
@@ -119,6 +120,10 @@ async fn main() -> anyhow::Result<()> {
         req_log_repo,
     };
 
+    let global_profile_state = GlobalProfileState {
+        up_repo: up_repo.clone(),
+    };
+
     // Capture config values to use inside middleware closures
     let api_key       = cfg.api_key.clone();
     let org_header    = "X-Organization-Id";
@@ -126,6 +131,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = memory_routes(state)
         .merge(health_routes())
+        .merge(global_profile_routes(global_profile_state))
         // Tenant middleware — extract org/space from headers, inject TenantContext extension
         .layer(axum::middleware::from_fn({
             let org = org_header;

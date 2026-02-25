@@ -14,6 +14,8 @@ pub struct UserProfile {
     pub profile_data: Option<Value>,
     /// Long-form life narrative summary
     pub life_summary: Option<String>,
+    /// Custom profile data (e.g. initial_profile sentences) injected via API
+    pub custom_profile_data: Option<Value>,
 
     #[serde(default)]
     pub is_deleted: bool,

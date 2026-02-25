@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use serde_json::Value;
 use surrealdb::engine::any::Any;
 use surrealdb::Surreal;
 
@@ -80,5 +81,26 @@ impl ConversationMetaRepo {
                 .context("ConversationMeta insert by group_id failed")?;
             created.context("Insert returned no record")
         }
+    }
+
+    /// Apply a partial JSON patch to the record identified by `group_id`.
+    /// Returns `None` if no matching record exists.
+    pub async fn patch_by_group_id(
+        &self,
+        group_id: &str,
+        patch: Value,
+    ) -> Result<Option<ConversationMeta>> {
+        let existing = self.get_by_group_id(group_id).await?;
+        let Some(ex) = existing else {
+            return Ok(None);
+        };
+        let id = ex.id.as_ref().map(|t| t.id.to_raw()).unwrap_or_default();
+        let updated: Option<ConversationMeta> = self
+            .db
+            .update(("conversation_meta", id))
+            .merge(patch)
+            .await
+            .context("ConversationMeta patch failed")?;
+        Ok(updated)
     }
 }

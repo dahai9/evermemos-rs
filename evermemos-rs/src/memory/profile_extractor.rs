@@ -94,6 +94,7 @@ impl ProfileExtractor {
             user_id: user_id.to_string(),
             profile_data: Some(Value::Object(profile_data)),
             life_summary: Some(life_summary),
+            custom_profile_data: existing_profile.and_then(|p| p.custom_profile_data.clone()),
             is_deleted: false,
             created_at: existing_profile
                 .and_then(|p| p.created_at)

@@ -8,7 +8,8 @@ use tracing::info;
 
 use crate::agentic::manager::{AgenticManager, RetrieveRequest};
 use crate::api::dto::{
-    ApiResponse, ConversationMetaQuery, ConversationMetaRequest, ConversationMetaResponse,
+    ApiResponse, ConversationMetaPatchBody, ConversationMetaPatchResponse,
+    ConversationMetaQuery, ConversationMetaRequest, ConversationMetaResponse,
     DeleteMemoriesRequest, DeleteMemoriesResponse, FetchMemoriesQuery,
     FetchMemoriesResponse, MemorizeMessageRequest, MemorizeResponse, RequestStatusQuery,
     RequestStatusResponse, SearchMemoriesQuery, SearchMemoriesResponse,
@@ -40,7 +41,9 @@ pub fn memory_routes(state: AppState) -> Router {
         .route("/api/v1/memories/search", get(search_handler))
         .route(
             "/api/v1/memories/conversation-meta",
-            post(conv_meta_upsert_handler).get(conv_meta_get_handler),
+            post(conv_meta_upsert_handler)
+                .get(conv_meta_get_handler)
+                .patch(conv_meta_patch_handler),
         )
         .route("/api/v1/memories/status", get(request_status_handler))
         .with_state(state)
@@ -222,6 +225,13 @@ async fn conv_meta_upsert_handler(
         conv_id: conv_id.clone(),
         user_id: body.user_id.clone(),
         group_id: body.group_id.clone(),
+        name: body.name.clone(),
+        description: None,
+        scene: body.scene.clone(),
+        scene_desc: None,
+        tags: None,
+        user_details: None,
+        default_timezone: None,
         title: body.title.clone().or_else(|| body.name.clone()),
         summary: body.summary.clone(),
         created_at: None,
@@ -289,6 +299,63 @@ async fn conv_meta_get_handler(
 }
 
 // ── GET /api/v1/memories/status ───────────────────────────────────────────────
+
+// ── PATCH /api/v1/memories/conversation-meta ─────────────────────────────────
+
+async fn conv_meta_patch_handler(
+    State(state): State<AppState>,
+    Extension(_tenant): Extension<TenantContext>,
+    Json(body): Json<ConversationMetaPatchBody>,
+) -> Result<Json<ApiResponse<ConversationMetaPatchResponse>>, AppError> {
+    let group_id = body.group_id.as_deref().unwrap_or("").to_string();
+    if group_id.is_empty() {
+        return Err(AppError::BadRequest("group_id is required for PATCH".into()));
+    }
+
+    let mut patch = serde_json::Map::new();
+    let mut updated_fields: Vec<String> = Vec::new();
+    macro_rules! maybe_set {
+        ($key:expr, $val:expr) => {
+            if let Some(v) = $val {
+                patch.insert($key.to_string(), serde_json::to_value(v).unwrap_or_default());
+                updated_fields.push($key.to_string());
+            }
+        };
+    }
+    maybe_set!("name",             body.name);
+    maybe_set!("description",      body.description);
+    maybe_set!("scene_desc",       body.scene_desc);
+    maybe_set!("tags",             body.tags);
+    maybe_set!("user_details",     body.user_details);
+    maybe_set!("default_timezone", body.default_timezone);
+
+    if patch.is_empty() {
+        return Ok(Json(ApiResponse::ok(
+            "No fields to update",
+            ConversationMetaPatchResponse { group_id: Some(group_id), updated_fields: vec![] },
+        )));
+    }
+
+    let patched = state
+        .conv_meta_repo
+        .patch_by_group_id(&group_id, serde_json::Value::Object(patch))
+        .await
+        .map_err(AppError::Internal)?;
+
+    if patched.is_none() {
+        return Err(AppError::NotFound(format!(
+            "conversation-meta not found for group_id={group_id}"
+        )));
+    }
+
+    Ok(Json(ApiResponse::ok(
+        "Conversation meta patched",
+        ConversationMetaPatchResponse {
+            group_id: Some(group_id),
+            updated_fields,
+        },
+    )))
+}
 
 async fn request_status_handler(
     State(state): State<AppState>,
