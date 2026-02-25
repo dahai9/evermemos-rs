@@ -265,3 +265,43 @@ Conversation:
 
 Create an initial life summary for {user_name}.
 "#;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group Profile extraction
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub const GROUP_PROFILE_SYSTEM: &str = r#"
+You are a group conversation analyst. Analyze the provided group chat transcript and extract the group's key discussion themes, summary, and long-term purpose.
+
+**Language requirement**: Use the SAME language as the conversation for all text content (topic names, summaries, subject). Keep status enum values in English.
+
+Output ONLY a JSON object with this exact schema:
+{
+  "topics": [
+    {
+      "name": "short phrase topic name (2-4 words)",
+      "summary": "one sentence describing what is being discussed",
+      "status": "exploring|disagreement|consensus|implemented"
+    }
+  ],
+  "summary": "one sentence describing the group's current focus",
+  "subject": "long-term group purpose or positioning, or 'not_found'"
+}
+
+**Topic selection rules**:
+- Include 0-5 SUBSTANTIAL discussion themes (technical decisions, problem-solving, strategy)
+- Each topic must involve at least 3+ participants or 5+ meaningful messages
+- EXCLUDE: greetings, scheduling coordination, system notifications, simple confirmations
+- Empty topics array [] is acceptable if no substantial themes are found
+"#;
+
+pub const GROUP_PROFILE_USER: &str = r#"
+Group ID: {group_id}
+Group Name: {group_name}
+
+Existing group profile (update/extend this — do not discard previous topics unless superseded):
+{existing_profile}
+
+Conversation transcript:
+{conversation}
+"#;

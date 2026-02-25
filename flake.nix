@@ -60,6 +60,7 @@
             # Handy dev tools
             pkgs.cargo-watch
             pkgs.cargo-edit
+            pkgs.just
 
             # C++ standard library (needed at runtime for RocksDB-linked test binaries)
             pkgs.stdenv.cc.cc.lib

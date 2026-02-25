@@ -7,13 +7,14 @@ use crate::memory::{
     episode_extractor::EpisodeExtractor,
     event_log_extractor::EventLogExtractor,
     foresight_extractor::ForesightExtractor,
+    group_profile_extractor::GroupProfileExtractor,
     profile_extractor::ProfileExtractor,
     prompts::Locale,
 };
 use crate::storage::{
     models::MemCell,
     repository::{
-        EpisodicMemoryRepo, EventLogRepo, ForesightRepo, UserProfileRepo,
+        EpisodicMemoryRepo, EventLogRepo, ForesightRepo, GroupProfileRepo, UserProfileRepo,
     },
 };
 
@@ -31,10 +32,12 @@ pub struct MemoryManager {
     foresight_ex: ForesightExtractor,
     event_log_ex: EventLogExtractor,
     profile_ex: ProfileExtractor,
+    group_profile_ex: GroupProfileExtractor,
     ep_repo: EpisodicMemoryRepo,
     fs_repo: ForesightRepo,
     el_repo: EventLogRepo,
     up_repo: UserProfileRepo,
+    gp_repo: GroupProfileRepo,
 }
 
 impl MemoryManager {
@@ -46,6 +49,7 @@ impl MemoryManager {
         fs_repo: ForesightRepo,
         el_repo: EventLogRepo,
         up_repo: UserProfileRepo,
+        gp_repo: GroupProfileRepo,
         locale: Locale,
         vector_model: String,
     ) -> Self {
@@ -67,10 +71,12 @@ impl MemoryManager {
                 vector_model,
             ),
             profile_ex: ProfileExtractor::new(Arc::clone(&llm)),
+            group_profile_ex: GroupProfileExtractor::new(Arc::clone(&llm)),
             ep_repo,
             fs_repo,
             el_repo,
             up_repo,
+            gp_repo,
         }
     }
 
@@ -186,8 +192,31 @@ impl MemoryManager {
             }
         };
 
+        // Group-scene: extract aggregated group profile (topics, summary, subject)
+        let gp_fut = async {
+            if scene == SceneType::Group {
+                if let (Some(gid), Some(gname)) = (group_id, group_name) {
+                    let existing = self.gp_repo.get_by_group_id(gid).await.ok().flatten();
+                    match self
+                        .group_profile_ex
+                        .extract(messages, gid, gname, existing.as_ref())
+                        .await
+                    {
+                        Ok(gp) => {
+                            if let Err(e) = self.gp_repo.upsert(gp).await {
+                                warn!("Failed to upsert group_profile: {e}");
+                            } else {
+                                debug!("Saved group_profile for group={gname}");
+                            }
+                        }
+                        Err(e) => warn!("GroupProfile extraction failed: {e}"),
+                    }
+                }
+            }
+        };
+
         // Run all concurrently (mirrors Python asyncio.gather)
-        tokio::join!(ep_fut, fs_fut, el_fut, profile_fut);
+        tokio::join!(ep_fut, fs_fut, el_fut, profile_fut, gp_fut);
 
         info!("MemoryManager: finished processing memcell {memcell_id}");
     }

@@ -24,7 +24,7 @@ use evermemos_rs::storage::{
     db,
     repository::{
         ClusterStateRepo, ConversationMetaRepo, EpisodicMemoryRepo, EventLogRepo,
-        ForesightRepo, MemCellRepo, MemoryRequestLogRepo, UserProfileRepo,
+        ForesightRepo, GroupProfileRepo, MemCellRepo, MemoryRequestLogRepo, UserProfileRepo,
     },
 };
 
@@ -47,6 +47,7 @@ async fn main() -> anyhow::Result<()> {
     let el_repo       = EventLogRepo::new(db.clone());
     let mc_repo       = MemCellRepo::new(db.clone());
     let up_repo       = UserProfileRepo::new(db.clone());
+    let gp_repo       = GroupProfileRepo::new(db.clone());
     let _cs_repo      = ClusterStateRepo::new(db.clone());
     let cm_repo       = ConversationMetaRepo::new(db.clone());
     let req_log_repo  = MemoryRequestLogRepo::new(db.clone());
@@ -76,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
         fs_repo.clone(),
         el_repo.clone(),
         up_repo.clone(),
+        gp_repo.clone(),
         locale,
         cfg.vectorize.model.clone(),
     ));

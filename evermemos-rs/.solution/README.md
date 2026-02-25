@@ -74,3 +74,4 @@ solution doc **通过 `--amend` 合并进它所记录的 commit**，永远不单
 | [45fe47b-feat-evermemos-rs---auto-start-server-in-test-scripts.md](./45fe47b-feat-evermemos-rs---auto-start-server-in-test-scripts.md) | 新增 server_utils.py；测试脚本自动启动/停止 Rust 服务，一条命令搞定 |
 | [0af07e8-feat-evermemos-rs--full-parity-21-21.md](./0af07e8-feat-evermemos-rs--full-parity-21-21.md) | conversation-meta/status/profile 三端点；BM25 查询词修复；seed assistant-mode；parity 21/21 |
 | [dfdcdd9-feat-evermemos-rs--patch-conv-meta---global-user-profile-custom.md](./dfdcdd9-feat-evermemos-rs--patch-conv-meta---global-user-profile-custom.md) | PATCH conversation-meta（部分更新）；POST global-user-profile/custom（注入初始画像）；新增 UserDetail/custom_profile_data 字段 |
+| [885ec2a-feat-evermemos-rs---groupprofile-extraction-for-group-chat-scenes.md](./885ec2a-feat-evermemos-rs---groupprofile-extraction-for-group-chat-scenes.md) | Group 场景 GroupProfile 抽取（topics/summary/subject）；单次 LLM 调用并发执行；group_profile 表 DDL |

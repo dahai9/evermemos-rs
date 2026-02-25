@@ -186,6 +186,22 @@ DEFINE INDEX IF NOT EXISTS idx_cm_conv  ON conversation_meta FIELDS conv_id UNIQ
 DEFINE INDEX IF NOT EXISTS idx_cm_user  ON conversation_meta FIELDS user_id;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- group_profile — aggregated group-chat profile (topics, summary, subject)
+-- ─────────────────────────────────────────────────────────────────────────────
+DEFINE TABLE IF NOT EXISTS group_profile SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS group_id    ON group_profile TYPE string;
+DEFINE FIELD IF NOT EXISTS group_name  ON group_profile TYPE option<string>;
+-- topics: serialised JSON array of TopicInfo objects
+DEFINE FIELD IF NOT EXISTS topics      ON group_profile TYPE option<any>;
+DEFINE FIELD IF NOT EXISTS summary     ON group_profile TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS subject     ON group_profile TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS is_deleted  ON group_profile TYPE bool DEFAULT false;
+DEFINE FIELD IF NOT EXISTS created_at  ON group_profile TYPE any DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS updated_at  ON group_profile TYPE any DEFAULT time::now();
+
+DEFINE INDEX IF NOT EXISTS idx_gp_group ON group_profile FIELDS group_id UNIQUE;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- memory_request_log — message ingestion audit log + pending queue
 -- ─────────────────────────────────────────────────────────────────────────────
 DEFINE TABLE IF NOT EXISTS memory_request_log SCHEMAFULL;
