@@ -3,28 +3,23 @@ use tracing::info;
 
 use evermemos_rs::agentic::manager::AgenticManager;
 use evermemos_rs::api::{
-    health_routes, memory_routes, global_profile_routes,
-    memory_router::AppState,
-    global_profile_router::GlobalProfileState,
+    global_profile_router::GlobalProfileState, global_profile_routes, health_routes,
+    memory_router::AppState, memory_routes,
 };
 use evermemos_rs::biz::memorize::MemorizeService;
 use evermemos_rs::config::AppConfig;
-use evermemos_rs::core::{cache::Caches, tracing as app_tracing, tenant::TenantContext};
+use evermemos_rs::core::{cache::Caches, tenant::TenantContext, tracing as app_tracing};
 use evermemos_rs::llm::{
-    openai::OpenAiProvider,
-    rerank::OpenAiReranker,
-    vectorize::OpenAiVectorizer,
+    apply_cassette, openai::OpenAiProvider, rerank::OpenAiReranker, vectorize::OpenAiVectorizer,
 };
 use evermemos_rs::memory::{
-    manager::MemoryManager,
-    memcell_extractor::MemCellExtractor,
-    prompts::Locale,
+    manager::MemoryManager, memcell_extractor::MemCellExtractor, prompts::Locale,
 };
 use evermemos_rs::storage::{
     db,
     repository::{
-        ClusterStateRepo, ConversationMetaRepo, EpisodicMemoryRepo, EventLogRepo,
-        ForesightRepo, GroupProfileRepo, MemCellRepo, MemoryRequestLogRepo, UserProfileRepo,
+        ClusterStateRepo, ConversationMetaRepo, EpisodicMemoryRepo, EventLogRepo, ForesightRepo,
+        GroupProfileRepo, MemCellRepo, MemoryRequestLogRepo, UserProfileRepo,
     },
 };
 
@@ -35,22 +30,25 @@ async fn main() -> anyhow::Result<()> {
 
     // ── 2. Config ─────────────────────────────────────────────────────────────
     let cfg = AppConfig::load()?;
-    info!("Config loaded. Server will listen on {}:{}", cfg.server.host, cfg.server.port);
+    info!(
+        "Config loaded. Server will listen on {}:{}",
+        cfg.server.host, cfg.server.port
+    );
 
     // ── 3. SurrealDB (embedded RocksDB) ──────────────────────────────────────
     let db = db::init(&cfg.surreal).await?;
     info!("SurrealDB connected at {}", cfg.surreal.endpoint);
 
     // ── 4. Repositories ───────────────────────────────────────────────────────
-    let ep_repo       = EpisodicMemoryRepo::new(db.clone());
-    let fs_repo       = ForesightRepo::new(db.clone());
-    let el_repo       = EventLogRepo::new(db.clone());
-    let mc_repo       = MemCellRepo::new(db.clone());
-    let up_repo       = UserProfileRepo::new(db.clone());
-    let gp_repo       = GroupProfileRepo::new(db.clone());
-    let _cs_repo      = ClusterStateRepo::new(db.clone());
-    let cm_repo       = ConversationMetaRepo::new(db.clone());
-    let req_log_repo  = MemoryRequestLogRepo::new(db.clone());
+    let ep_repo = EpisodicMemoryRepo::new(db.clone());
+    let fs_repo = ForesightRepo::new(db.clone());
+    let el_repo = EventLogRepo::new(db.clone());
+    let mc_repo = MemCellRepo::new(db.clone());
+    let up_repo = UserProfileRepo::new(db.clone());
+    let gp_repo = GroupProfileRepo::new(db.clone());
+    let _cs_repo = ClusterStateRepo::new(db.clone());
+    let cm_repo = ConversationMetaRepo::new(db.clone());
+    let req_log_repo = MemoryRequestLogRepo::new(db.clone());
 
     // ── 5. Caches ─────────────────────────────────────────────────────────────
     let caches = Caches::new();
@@ -64,6 +62,9 @@ async fn main() -> anyhow::Result<()> {
 
     let reranker: Arc<dyn evermemos_rs::llm::rerank::RerankService> =
         Arc::from(OpenAiReranker::build(&cfg.rerank));
+
+    // ── 6b. Cassette (record/replay) — wraps providers if LLM_CASSETTE_MODE != off ──
+    let (llm_provider, vectorizer, reranker) = apply_cassette(llm_provider, vectorizer, reranker);
 
     // ── 7. Memory extraction layer ────────────────────────────────────────────
     let locale = Locale::default(); // can be made config-driven later
@@ -110,7 +111,10 @@ async fn main() -> anyhow::Result<()> {
                 tracing::error!("NATS worker terminated: {e}");
             }
         });
-        info!("NATS worker started (subject={})", cfg.nats.subject_memorize);
+        info!(
+            "NATS worker started (subject={})",
+            cfg.nats.subject_memorize
+        );
     }
 
     // ── 10. Axum router ───────────────────────────────────────────────────────
@@ -127,9 +131,9 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Capture config values to use inside middleware closures
-    let api_key       = cfg.api_key.clone();
-    let org_header    = "X-Organization-Id";
-    let space_header  = "X-Space-Id";
+    let api_key = cfg.api_key.clone();
+    let org_header = "X-Organization-Id";
+    let space_header = "X-Space-Id";
 
     let app = memory_routes(state)
         .merge(health_routes())
@@ -151,7 +155,8 @@ async fn main() -> anyhow::Result<()> {
                     .and_then(|v| v.to_str().ok())
                     .unwrap_or("")
                     .to_string();
-                req.extensions_mut().insert(TenantContext::new(org_id, space_id));
+                req.extensions_mut()
+                    .insert(TenantContext::new(org_id, space_id));
                 next.run(req).await
             }
         }))
@@ -179,10 +184,12 @@ async fn main() -> anyhow::Result<()> {
         // Tower-http request tracing
         .layer(
             tower_http::trace::TraceLayer::new_for_http()
-                .make_span_with(tower_http::trace::DefaultMakeSpan::new()
-                    .level(tracing::Level::INFO))
-                .on_response(tower_http::trace::DefaultOnResponse::new()
-                    .level(tracing::Level::INFO)),
+                .make_span_with(
+                    tower_http::trace::DefaultMakeSpan::new().level(tracing::Level::INFO),
+                )
+                .on_response(
+                    tower_http::trace::DefaultOnResponse::new().level(tracing::Level::INFO),
+                ),
         );
 
     // ── 11. Start server ──────────────────────────────────────────────────────

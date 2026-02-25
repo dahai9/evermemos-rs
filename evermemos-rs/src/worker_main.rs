@@ -9,6 +9,7 @@ use evermemos_rs::biz::memorize::MemorizeService;
 use evermemos_rs::config::AppConfig;
 use evermemos_rs::core::{cache::Caches, tracing as app_tracing};
 use evermemos_rs::llm::{
+    apply_cassette,
     openai::OpenAiProvider,
     rerank::OpenAiReranker,
     vectorize::OpenAiVectorizer,
@@ -57,8 +58,10 @@ async fn main() -> anyhow::Result<()> {
     let llm: Arc<dyn evermemos_rs::llm::provider::LlmProvider> = Arc::new(OpenAiProvider::new(&cfg.llm));
     let vectorizer: Arc<dyn evermemos_rs::llm::vectorize::VectorizeService> =
         Arc::new(OpenAiVectorizer::new(&cfg.vectorize, caches));
-    let _reranker: Arc<dyn evermemos_rs::llm::rerank::RerankService> =
+    let reranker: Arc<dyn evermemos_rs::llm::rerank::RerankService> =
         Arc::from(OpenAiReranker::build(&cfg.rerank));
+
+    let (llm, vectorizer, _reranker) = apply_cassette(llm, vectorizer, reranker);
 
     let locale = Locale::default();
     let boundary_detector = MemCellExtractor::new(Arc::clone(&llm), locale);

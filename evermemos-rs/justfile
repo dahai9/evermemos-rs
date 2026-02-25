@@ -80,6 +80,29 @@ test: test-completeness test-parity
 unit-test:
     cargo test
 
+# ── Cassette (record / replay) ──────────────────────────────────────────────────
+
+CASSETTE_FILE := "cassette/llm_cassette.json"
+
+# Record all LLM / embed / rerank calls into the cassette file (uses real API tokens)
+record: stop start
+    @echo "⏺ Recording LLM cassette → {{CASSETTE_FILE}}"
+    LLM_CASSETTE_MODE=record LLM_CASSETTE_FILE={{CASSETTE_FILE}} python {{DEMO}}/parity_test.py
+    @echo "✓ Cassette written."
+
+# Run parity tests replaying from cassette — no API calls, no tokens consumed
+replay: stop start
+    @echo "▶️  Replaying from cassette → {{CASSETTE_FILE}}"
+    LLM_CASSETTE_MODE=replay LLM_CASSETTE_FILE={{CASSETTE_FILE}} python {{DEMO}}/parity_test.py
+
+# Auto mode: use cassette when available, fall through to real API for new prompts
+auto-test: stop start
+    LLM_CASSETTE_MODE=auto LLM_CASSETTE_FILE={{CASSETTE_FILE}} python {{DEMO}}/parity_test.py
+
+# Delete the cassette file (forces a fresh recording on next `just record`)
+clean-cassette:
+    rm -f {{CASSETTE_FILE}}
+
 # ── Maintenance ───────────────────────────────────────────────────────────────
 
 # Remove build artefacts

@@ -1,9 +1,11 @@
-pub mod provider;
+pub mod cassette;
 pub mod openai;
-pub mod vectorize;
+pub mod provider;
 pub mod rerank;
+pub mod vectorize;
 
-pub use provider::{LlmProvider, LlmMessage, LlmRole};
+pub use cassette::apply_cassette;
 pub use openai::OpenAiProvider;
-pub use vectorize::{VectorizeService, OpenAiVectorizer};
-pub use rerank::{RerankService, OpenAiReranker};
+pub use provider::{LlmMessage, LlmProvider, LlmRole};
+pub use rerank::{OpenAiReranker, RerankService};
+pub use vectorize::{OpenAiVectorizer, VectorizeService};
