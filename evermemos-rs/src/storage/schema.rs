@@ -192,7 +192,7 @@ DEFINE TABLE IF NOT EXISTS group_profile SCHEMAFULL;
 DEFINE FIELD IF NOT EXISTS group_id    ON group_profile TYPE string;
 DEFINE FIELD IF NOT EXISTS group_name  ON group_profile TYPE option<string>;
 -- topics: serialised JSON array of TopicInfo objects
-DEFINE FIELD IF NOT EXISTS topics      ON group_profile TYPE option<any>;
+DEFINE FIELD IF NOT EXISTS topics      ON group_profile TYPE option<array>;
 DEFINE FIELD IF NOT EXISTS summary     ON group_profile TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS subject     ON group_profile TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS is_deleted  ON group_profile TYPE bool DEFAULT false;

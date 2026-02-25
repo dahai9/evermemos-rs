@@ -114,6 +114,7 @@ impl SearchMemoriesQuery {
                         "foresight_record" | "FORESIGHT" => MemoryType::ForesightRecord,
                         "event_log_record" | "EVENT_LOG" => MemoryType::EventLogRecord,
                         "profile" | "PROFILE" => MemoryType::Profile,
+                        "core_memory" | "CORE_MEMORY" | "CORE" => MemoryType::CoreMemory,
                         _ => MemoryType::EpisodicMemory,
                     })
                     .collect()
@@ -238,4 +239,3 @@ pub struct UpsertCustomProfileResponse {
     pub user_id: String,
     pub message: Option<String>,
 }
-

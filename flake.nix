@@ -80,11 +80,8 @@
           LD_LIBRARY_PATH = "${pkgs.stdenv.cc.cc.lib}/lib:${llvmPkgs.libclang.lib}/lib";
 
           shellHook = ''
+            source .venv/bin/activate
             echo "🦀 evermemos-rs dev shell ready"
-            echo "   Rust: $(rustc --version)"
-            echo "   Clang: $(clang --version | head -1)"
-            echo "   LIBCLANG_PATH: $LIBCLANG_PATH"
-            echo "   LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
           '';
         };
       }

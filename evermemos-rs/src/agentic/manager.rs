@@ -35,6 +35,9 @@ pub enum MemoryType {
     ForesightRecord,
     EventLogRecord,
     Profile,
+    /// Highest-priority structured user profile (mirrors Python `core_memory` collection).
+    /// Backed by the same `user_profile` table; exposed with `memory_type = "core_memory"`.
+    CoreMemory,
     All,
 }
 
@@ -164,6 +167,13 @@ impl AgenticManager {
                         }
                     }
                 }
+                MemoryType::CoreMemory => {
+                    if let Some(uid_str) = uid {
+                        if let Ok(Some(profile)) = self.up_repo.get_by_user_id(uid_str).await {
+                            items.push(cm_to_item(profile));
+                        }
+                    }
+                }
             }
         }
 
@@ -212,6 +222,13 @@ impl AgenticManager {
                     if let Some(uid_str) = uid {
                         if let Ok(Some(profile)) = self.up_repo.get_by_user_id(uid_str).await {
                             items.push(up_to_item(profile));
+                        }
+                    }
+                }
+                MemoryType::CoreMemory => {
+                    if let Some(uid_str) = uid {
+                        if let Ok(Some(profile)) = self.up_repo.get_by_user_id(uid_str).await {
+                            items.push(cm_to_item(profile));
                         }
                     }
                 }
@@ -474,6 +491,31 @@ fn up_to_item(profile: crate::storage::models::UserProfile) -> MemoryItem {
         metadata: serde_json::json!({
             "user_id": profile.user_id,
             "profile_data": profile.profile_data,
+        }),
+    }
+}
+
+/// Same backing data as `up_to_item` but exposed as `memory_type = "core_memory"`.
+/// Mirrors Python's `CoreMemory` collection — highest-priority user profile memory.
+fn cm_to_item(profile: crate::storage::models::UserProfile) -> MemoryItem {
+    let id = profile.id.as_ref().map(|t| t.to_raw()).unwrap_or_default();
+    let content = profile.life_summary.clone().unwrap_or_else(|| {
+        profile
+            .profile_data
+            .as_ref()
+            .map(|v| v.to_string())
+            .unwrap_or_default()
+    });
+    MemoryItem {
+        id,
+        memory_type: "core_memory".into(),
+        content,
+        score: 1.0,
+        timestamp: profile.created_at,
+        metadata: serde_json::json!({
+            "user_id": profile.user_id,
+            "profile_data": profile.profile_data,
+            "is_latest": true,
         }),
     }
 }
