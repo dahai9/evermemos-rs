@@ -38,6 +38,7 @@ lint:
 # ── Server ────────────────────────────────────────────────────────────────────
 
 LOG := "/tmp/evermemos.log"
+PID_FILE := "/tmp/evermemos.pid"
 
 # Build (debug) then start the server in the foreground
 serve:
@@ -48,11 +49,23 @@ start:
     #!/usr/bin/env bash
     echo "Starting evermemos-rs → log: {{LOG}}"
     cargo run --bin evermemos > {{LOG}} 2>&1 &
+    echo $! > {{PID_FILE}}
     echo "PID: $!"
 
 # Kill any running evermemos server
 stop:
-    @pkill -f "debug/evermemos" && echo "stopped" || echo "not running"
+    #!/usr/bin/env bash
+    if [ -f {{PID_FILE}} ]; then
+        PID=$(cat {{PID_FILE}})
+        if kill "$PID" 2>/dev/null; then
+            echo "stopped (PID $PID)"
+        else
+            echo "not running"
+        fi
+        rm -f {{PID_FILE}}
+    else
+        pkill -x evermemos 2>/dev/null && echo "stopped" || echo "not running"
+    fi
 
 # Restart server (stop → start)
 restart: stop start
@@ -117,9 +130,9 @@ clean-cassette:
 clean:
     cargo clean
 
-# Delete server logfile
+# Delete server logfile and PID file
 clean-log:
-    rm -f {{LOG}}
+    rm -f {{LOG}} {{PID_FILE}}
 
 # Delete the SurrealDB data directory (wipes all stored memories)
 clean-data:

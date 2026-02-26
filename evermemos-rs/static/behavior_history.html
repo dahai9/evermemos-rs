@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Behavior History — EverMemOS</title>
+<style>
+  :root {
+    --bg:       #0f1117;
+    --panel:    #161b27;
+    --border:   #252d3d;
+    --accent:   #4f8ef7;
+    --accent2:  #a855f7;
+    --success:  #22c55e;
+    --danger:   #ef4444;
+    --warn:     #f59e0b;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --tag-bg:   #1e2a40;
+    --radius:   8px;
+    --font:     "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+
+  /* ── Topbar ── */
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header .logo { font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
+  header .sep  { color: var(--border); font-size: 22px; }
+  header h1    { font-size: 16px; font-weight: 500; color: var(--text); }
+
+  /* ── Layout ── */
+  .container { max-width: 1300px; margin: 0 auto; padding: 28px 24px; }
+
+  /* ── Stats row ── */
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+  }
+  .stat-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
+  .stat-card .value { font-size: 32px; font-weight: 700; color: var(--accent); }
+  .stat-card .value.v2 { color: var(--accent2); }
+
+  /* ── Breakdown bar ── */
+  .breakdown-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .breakdown-card h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing:.6px; margin-bottom: 14px; }
+  .bar-list { display: flex; flex-direction: column; gap: 10px; }
+  .bar-item { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .bar-item .bname { width: 140px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-track { flex: 1; background: var(--bg); border-radius: 4px; height: 10px; overflow: hidden; }
+  .bar-fill  { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 4px; transition: width .4s ease; }
+  .bar-count { width: 48px; text-align: right; color: var(--muted); }
+
+  /* ── Controls ── */
+  .controls {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  input, select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 11px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--muted); }
+
+  .btn {
+    padding: 8px 18px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn-primary  { background: var(--accent);  color: #fff; }
+  .btn-secondary{ background: var(--border);  color: var(--text); }
+  .btn-success  { background: var(--success); color: #fff; }
+  .btn-danger   { background: var(--danger);  color: #fff; }
+  .btn-sm       { padding: 5px 12px; font-size: 12px; }
+
+  /* ── Table ── */
+  .table-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: auto;
+    margin-bottom: 20px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: var(--bg);
+    color: var(--muted);
+    text-align: left;
+    padding: 12px 14px;
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(79,142,247,.05); }
+  td { padding: 11px 14px; vertical-align: middle; }
+
+  /* ── Tags ── */
+  .tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    color: var(--accent);
+    border: 1px solid rgba(79,142,247,.3);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 11px;
+    margin: 2px 3px 2px 0;
+  }
+
+  /* ── Meta preview ── */
+  .meta-preview {
+    font-size: 11px;
+    color: var(--muted);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: monospace;
+  }
+
+  /* ── Empty / loading ── */
+  .empty {
+    text-align: center;
+    padding: 48px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .spinner {
+    display: inline-block;
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Create modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 100;
+    place-items: center;
+  }
+  .modal-overlay.active { display: grid; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    width: 480px;
+    max-width: 95vw;
+  }
+  .modal h2 { font-size: 16px; margin-bottom: 20px; }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing:.5px; margin-bottom: 5px; }
+  .form-group input, .form-group textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 8px 12px;
+    outline: none;
+  }
+  .form-group textarea { resize: vertical; min-height: 80px; font-family: monospace; }
+  .form-group input:focus, .form-group textarea:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  /* ── Toast ── */
+  #toast { position: fixed; bottom: 24px; right: 24px; z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .toast-item {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--success);
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 13px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.4);
+    animation: fadein .2s ease, fadeout .3s ease 2.7s forwards;
+  }
+  .toast-item.err { border-left-color: var(--danger); }
+  @keyframes fadein  { from { opacity:0; transform:translateY(10px); } }
+  @keyframes fadeout { to   { opacity:0; transform:translateY(10px); } }
+
+  .pagination { display:flex; gap:8px; justify-content: flex-end; align-items:center; font-size:13px; color:var(--muted); }
+  .page-info { margin:0 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">EverMemOS</span>
+  <span class="sep">|</span>
+  <h1>Behavior History</h1>
+</header>
+
+<div class="container">
+
+  <!-- Stats Row -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="label">Total Records</div>
+      <div class="value" id="stat-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Unique Types</div>
+      <div class="value v2" id="stat-types">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Current User</div>
+      <div class="value" id="stat-user" style="font-size:16px;margin-top:4px;">—</div>
+    </div>
+  </div>
+
+  <!-- Breakdown Chart -->
+  <div class="breakdown-card">
+    <h3>Behavior Type Breakdown</h3>
+    <div class="bar-list" id="breakdown-bars">
+      <div class="empty" style="padding:12px 0;">Load a user to see breakdown</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="field">
+      <label>User ID</label>
+      <input id="uid" type="text" placeholder="e.g. alice" value="" style="width:180px;" />
+    </div>
+    <div class="field">
+      <label>Type Filter</label>
+      <input id="filter-type" type="text" placeholder="chat, vote…" style="width:140px;" />
+    </div>
+    <div class="field">
+      <label>Start Date</label>
+      <input id="filter-start" type="datetime-local" style="width:190px;" />
+    </div>
+    <div class="field">
+      <label>End Date</label>
+      <input id="filter-end" type="datetime-local" style="width:190px;" />
+    </div>
+    <div class="field">
+      <label>Limit</label>
+      <select id="limit">
+        <option value="20">20</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="200">200</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="loadRecords()">Search</button>
+    <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+    <button class="btn btn-success" onclick="openModal()" style="margin-left:auto;">+ Add Record</button>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Behavior Types</th>
+          <th>Event ID</th>
+          <th>Meta</th>
+          <th>Extend</th>
+          <th style="width:80px;text-align:center;">Action</th>
+        </tr>
+      </thead>
+      <tbody id="records-body">
+        <tr><td colspan="6" class="empty">Enter a User ID and click Search</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- Create Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2>Add Behavior Record</h2>
+    <div class="form-group">
+      <label>User ID *</label>
+      <input id="form-uid" type="text" placeholder="alice" />
+    </div>
+    <div class="form-group">
+      <label>Behavior Types * (comma-separated)</label>
+      <input id="form-types" type="text" placeholder="chat, follow-up, vote" />
+    </div>
+    <div class="form-group">
+      <label>Event ID (optional)</label>
+      <input id="form-event" type="text" placeholder="conv_abc123" />
+    </div>
+    <div class="form-group">
+      <label>Timestamp (optional, defaults to now)</label>
+      <input id="form-ts" type="datetime-local" />
+    </div>
+    <div class="form-group">
+      <label>Meta (JSON, optional)</label>
+      <textarea id="form-meta" placeholder='{"conv_id": "c1", "score": 5}'></textarea>
+    </div>
+    <div class="form-group">
+      <label>Extend (JSON, optional)</label>
+      <textarea id="form-extend" placeholder='{"source": "web"}'></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-success" onclick="createRecord()">Create</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const BASE = '';  // same origin
+
+let currentRecords = [];
+
+/* ── Toast ── */
+function toast(msg, err=false) {
+  const el = document.getElementById('toast');
+  const item = document.createElement('div');
+  item.className = 'toast-item' + (err ? ' err' : '');
+  item.textContent = msg;
+  el.appendChild(item);
+  setTimeout(() => item.remove(), 3200);
+}
+
+/* ── Stats ── */
+async function loadStats(uid) {
+  if (!uid) return;
+  try {
+    const r = await fetch(`${BASE}/api/v1/behavior-history/stats?user_id=${encodeURIComponent(uid)}`);
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    document.getElementById('stat-total').textContent = d.total ?? '—';
+    document.getElementById('stat-user').textContent = uid;
+    const bd = d.breakdown ?? {};
+    const keys = Object.keys(bd);
+    document.getElementById('stat-types').textContent = keys.length;
+    renderBreakdown(bd);
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+function renderBreakdown(bd) {
+  const container = document.getElementById('breakdown-bars');
+  const entries = Object.entries(bd).sort((a,b) => b[1]-a[1]);
+  if (!entries.length) {
+    container.innerHTML = '<div class="empty" style="padding:12px 0;">No data</div>';
+    return;
+  }
+  const max = entries[0][1];
+  container.innerHTML = entries.map(([name, count]) => `
+    <div class="bar-item">
+      <span class="bname" title="${name}">${name}</span>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${max>0?(count/max*100).toFixed(1):0}%"></div>
+      </div>
+      <span class="bar-count">${count}</span>
+    </div>
+  `).join('');
+}
+
+/* ── Load Records ── */
+async function loadRecords() {
+  const uid   = document.getElementById('uid').value.trim();
+  const type  = document.getElementById('filter-type').value.trim();
+  const start = document.getElementById('filter-start').value;
+  const end   = document.getElementById('filter-end').value;
+  const limit = document.getElementById('limit').value;
+
+  const body = document.getElementById('records-body');
+  body.innerHTML = `<tr><td colspan="6" class="empty"><span class="spinner"></span>Loading…</td></tr>`;
+
+  const params = new URLSearchParams();
+  if (uid)   params.set('user_id', uid);
+  if (type)  params.set('behavior_type', type);
+  if (start) params.set('start_time', new Date(start).toISOString());
+  if (end)   params.set('end_time',   new Date(end).toISOString());
+  if (limit) params.set('limit', limit);
+
+  try {
+    const r = await fetch(`${BASE}/api/v1/behavior-history?${params}`);
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    currentRecords = d.records ?? [];
+    renderTable(currentRecords);
+    document.getElementById('pagination').textContent = `${currentRecords.length} record(s) shown`;
+    if (uid) loadStats(uid);
+  } catch(e) {
+    body.innerHTML = `<tr><td colspan="6" class="empty" style="color:var(--danger)">${e.message}</td></tr>`;
+  }
+}
+
+function renderTable(records) {
+  const body = document.getElementById('records-body');
+  if (!records.length) {
+    body.innerHTML = '<tr><td colspan="6" class="empty">No records found</td></tr>';
+    return;
+  }
+  body.innerHTML = records.map((rec, i) => `
+    <tr>
+      <td style="white-space:nowrap;color:var(--muted)">${formatTs(rec.timestamp)}</td>
+      <td>${renderTags(rec.behavior_type)}</td>
+      <td style="color:var(--muted);font-size:12px;font-family:monospace">${rec.event_id ?? '—'}</td>
+      <td><div class="meta-preview" title="${escHtml(JSON.stringify(rec.meta))}">${escHtml(JSON.stringify(rec.meta ?? {}))}</div></td>
+      <td><div class="meta-preview" title="${escHtml(JSON.stringify(rec.extend))}">${escHtml(JSON.stringify(rec.extend ?? {}))}</div></td>
+      <td style="text-align:center">
+        <button class="btn btn-danger btn-sm" onclick="deleteRecord('${rec.id}', ${i})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderTags(types) {
+  if (!Array.isArray(types) || !types.length) return '<span style="color:var(--muted)">—</span>';
+  return types.map(t => `<span class="tag">${escHtml(t)}</span>`).join('');
+}
+
+function formatTs(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return d.toLocaleString('sv-SE').replace('T',' ').substring(0,19);
+}
+
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Delete ── */
+async function deleteRecord(id, idx) {
+  if (!id || !confirm('Soft-delete this record?')) return;
+  // id from server is like "behavior_history:xxxx", encode for URL
+  const encoded = encodeURIComponent(id.replace('behavior_history:', ''));
+  try {
+    const r = await fetch(`${BASE}/api/v1/behavior-history/${encoded}`, {method:'DELETE'});
+    if (!r.ok) throw new Error(await r.text());
+    toast('Record deleted');
+    currentRecords.splice(idx, 1);
+    renderTable(currentRecords);
+    document.getElementById('pagination').textContent = `${currentRecords.length} record(s) shown`;
+    // refresh stats
+    const uid = document.getElementById('uid').value.trim();
+    if (uid) loadStats(uid);
+  } catch(e) {
+    toast(e.message, true);
+  }
+}
+
+/* ── Create Modal ── */
+function openModal() {
+  const uid = document.getElementById('uid').value.trim();
+  if (uid) document.getElementById('form-uid').value = uid;
+  // set timestamp to now
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('form-ts').value = now.toISOString().slice(0,16);
+  document.getElementById('modal').classList.add('active');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+}
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+async function createRecord() {
+  const uid   = document.getElementById('form-uid').value.trim();
+  const types = document.getElementById('form-types').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if (!uid)        { toast('User ID is required', true); return; }
+  if (!types.length){ toast('At least one behavior type is required', true); return; }
+
+  const event_id = document.getElementById('form-event').value.trim() || null;
+  const tsVal    = document.getElementById('form-ts').value;
+  const timestamp = tsVal ? new Date(tsVal).toISOString() : null;
+
+  let meta = null, extend = null;
+  try { const v=document.getElementById('form-meta').value.trim(); if(v) meta=JSON.parse(v); } catch { toast('Meta is not valid JSON', true); return; }
+  try { const v=document.getElementById('form-extend').value.trim(); if(v) extend=JSON.parse(v); } catch { toast('Extend is not valid JSON', true); return; }
+
+  const payload = { user_id: uid, behavior_type: types };
+  if (event_id)  payload.event_id  = event_id;
+  if (timestamp) payload.timestamp = timestamp;
+  if (meta)      payload.meta      = meta;
+  if (extend)    payload.extend    = extend;
+
+  try {
+    const r = await fetch(`${BASE}/api/v1/behavior-history`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    toast('Record created ✓');
+    closeModal();
+    // Reset form
+    ['form-uid','form-types','form-event','form-meta','form-extend'].forEach(id=>document.getElementById(id).value='');
+    // Reload
+    document.getElementById('uid').value = uid;
+    loadRecords();
+  } catch(e) {
+    toast(e.message, true);
+  }
+}
+
+/* ── Helpers ── */
+function clearFilters() {
+  ['filter-type','filter-start','filter-end'].forEach(id => document.getElementById(id).value='');
+}
+
+// Allow Enter key in uid field to search
+document.getElementById('uid').addEventListener('keydown', e => {
+  if (e.key === 'Enter') loadRecords();
+});
+</script>
+</body>
+</html>

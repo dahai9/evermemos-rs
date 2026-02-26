@@ -13,7 +13,8 @@ use crate::llm::provider::{complete_json, LlmMessage, LlmProvider};
 use crate::llm::rerank::RerankService;
 use crate::llm::vectorize::VectorizeService;
 use crate::storage::repository::{
-    DateRange, EpisodicMemoryRepo, EventLogRepo, ForesightRepo, SearchResult, UserProfileRepo,
+    BehaviorHistoryRepo, DateRange, EpisodicMemoryRepo, EventLogRepo, ForesightRepo, SearchResult,
+    UserProfileRepo,
 };
 
 /// Retrieval method matching the Python `RetrieveMethod` enum.
@@ -38,6 +39,7 @@ pub enum MemoryType {
     /// Highest-priority structured user profile (mirrors Python `core_memory` collection).
     /// Backed by the same `user_profile` table; exposed with `memory_type = "core_memory"`.
     CoreMemory,
+    BehaviorHistory,
     All,
 }
 
@@ -82,6 +84,7 @@ pub struct AgenticManager {
     fs_repo: ForesightRepo,
     el_repo: EventLogRepo,
     up_repo: UserProfileRepo,
+    bh_repo: BehaviorHistoryRepo,
 }
 
 impl AgenticManager {
@@ -93,6 +96,7 @@ impl AgenticManager {
         fs_repo: ForesightRepo,
         el_repo: EventLogRepo,
         up_repo: UserProfileRepo,
+        bh_repo: BehaviorHistoryRepo,
     ) -> Self {
         Self {
             llm,
@@ -102,6 +106,7 @@ impl AgenticManager {
             fs_repo,
             el_repo,
             up_repo,
+            bh_repo,
         }
     }
 
@@ -174,6 +179,17 @@ impl AgenticManager {
                         }
                     }
                 }
+                MemoryType::BehaviorHistory => {
+                    // BehaviorHistory has no BM25 index; return time-sorted list.
+                    if let Some(uid_str) = uid {
+                        let records = self
+                            .bh_repo
+                            .get_by_user_id(uid_str, req.top_k)
+                            .await
+                            .unwrap_or_default();
+                        items.extend(records.into_iter().map(bh_to_item));
+                    }
+                }
             }
         }
 
@@ -230,6 +246,17 @@ impl AgenticManager {
                         if let Ok(Some(profile)) = self.up_repo.get_by_user_id(uid_str).await {
                             items.push(cm_to_item(profile));
                         }
+                    }
+                }
+                MemoryType::BehaviorHistory => {
+                    // No HNSW index on behavior_history; fall back to time-sorted list.
+                    if let Some(uid_str) = uid {
+                        let records = self
+                            .bh_repo
+                            .get_by_user_id(uid_str, req.top_k)
+                            .await
+                            .unwrap_or_default();
+                        items.extend(records.into_iter().map(bh_to_item));
                     }
                 }
             }
@@ -516,6 +543,24 @@ fn cm_to_item(profile: crate::storage::models::UserProfile) -> MemoryItem {
             "user_id": profile.user_id,
             "profile_data": profile.profile_data,
             "is_latest": true,
+        }),
+    }
+}
+
+fn bh_to_item(b: crate::storage::models::BehaviorHistory) -> MemoryItem {
+    let id = b.id.as_ref().map(|t| t.to_raw()).unwrap_or_default();
+    let content = b.behavior_type.join(", ");
+    MemoryItem {
+        id,
+        memory_type: "behavior_history".into(),
+        content,
+        score: 1.0,
+        timestamp: Some(b.timestamp),
+        metadata: serde_json::json!({
+            "user_id": b.user_id,
+            "behavior_type": b.behavior_type,
+            "event_id": b.event_id,
+            "meta": b.meta,
         }),
     }
 }

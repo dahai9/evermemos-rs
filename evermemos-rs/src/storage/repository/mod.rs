@@ -1,3 +1,4 @@
+pub mod behavior_history;
 pub mod cluster_state;
 pub mod conversation_meta;
 pub mod episodic_memory;
@@ -8,6 +9,7 @@ pub mod memcell;
 pub mod request_log;
 pub mod user_profile;
 
+pub use behavior_history::BehaviorHistoryRepo;
 pub use cluster_state::ClusterStateRepo;
 pub use conversation_meta::ConversationMetaRepo;
 pub use episodic_memory::EpisodicMemoryRepo;

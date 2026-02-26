@@ -5,6 +5,14 @@
 			"url": "https://mcp.deepwiki.com/mcp",
 			"gallery": "https://api.mcp.github.com",
 			"version": "1.0.0"
+		},
+		"evermemos": {
+			"command": "/home/dahai003/.cargo/target/release/evermemos-mcp",
+			"env": {
+				"EVERMEMOS_BASE_URL": "http://localhost:8080",
+				"EVERMEMOS_GROUP_ID": "my_chat",
+				"EVERMEMOS_USER_ID": "alice"
+			}
 		}
 	},
 	"inputs": []

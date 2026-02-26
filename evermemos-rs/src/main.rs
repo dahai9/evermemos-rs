@@ -3,8 +3,8 @@ use tracing::info;
 
 use evermemos_rs::agentic::manager::AgenticManager;
 use evermemos_rs::api::{
-    global_profile_router::GlobalProfileState, global_profile_routes, health_routes,
-    memory_router::AppState, memory_routes,
+    behavior_history_routes, global_profile_router::GlobalProfileState, global_profile_routes,
+    health_routes, memory_router::AppState, memory_routes, ui_routes, BehaviorHistoryState,
 };
 use evermemos_rs::biz::memorize::MemorizeService;
 use evermemos_rs::config::AppConfig;
@@ -18,8 +18,9 @@ use evermemos_rs::memory::{
 use evermemos_rs::storage::{
     db,
     repository::{
-        ClusterStateRepo, ConversationMetaRepo, EpisodicMemoryRepo, EventLogRepo, ForesightRepo,
-        GroupProfileRepo, MemCellRepo, MemoryRequestLogRepo, UserProfileRepo,
+        BehaviorHistoryRepo, ClusterStateRepo, ConversationMetaRepo, EpisodicMemoryRepo,
+        EventLogRepo, ForesightRepo, GroupProfileRepo, MemCellRepo, MemoryRequestLogRepo,
+        UserProfileRepo,
     },
 };
 
@@ -49,6 +50,7 @@ async fn main() -> anyhow::Result<()> {
     let _cs_repo = ClusterStateRepo::new(db.clone());
     let cm_repo = ConversationMetaRepo::new(db.clone());
     let req_log_repo = MemoryRequestLogRepo::new(db.clone());
+    let bh_repo = BehaviorHistoryRepo::new(db.clone());
 
     // ── 5. Caches ─────────────────────────────────────────────────────────────
     let caches = Caches::new();
@@ -98,6 +100,7 @@ async fn main() -> anyhow::Result<()> {
         fs_repo.clone(),
         el_repo.clone(),
         up_repo.clone(),
+        bh_repo.clone(),
     ));
 
     // ── 9. Optional NATS worker (fire-and-forget) ─────────────────────────────
@@ -130,6 +133,10 @@ async fn main() -> anyhow::Result<()> {
         up_repo: up_repo.clone(),
     };
 
+    let bh_state = BehaviorHistoryState {
+        bh_repo: bh_repo.clone(),
+    };
+
     // Capture config values to use inside middleware closures
     let api_key = cfg.api_key.clone();
     let org_header = "X-Organization-Id";
@@ -138,6 +145,8 @@ async fn main() -> anyhow::Result<()> {
     let app = memory_routes(state)
         .merge(health_routes())
         .merge(global_profile_routes(global_profile_state))
+        .merge(behavior_history_routes(bh_state))
+        .merge(ui_routes())
         // Tenant middleware — extract org/space from headers, inject TenantContext extension
         .layer(axum::middleware::from_fn({
             let org = org_header;

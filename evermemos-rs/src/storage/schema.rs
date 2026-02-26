@@ -217,6 +217,28 @@ DEFINE FIELD IF NOT EXISTS updated_at   ON memory_request_log TYPE any DEFAULT t
 DEFINE INDEX IF NOT EXISTS idx_mrl_msg    ON memory_request_log FIELDS message_id UNIQUE;
 DEFINE INDEX IF NOT EXISTS idx_mrl_status ON memory_request_log FIELDS sync_status;
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- behavior_history — user behavior tracking (chat, vote, file ops, etc.)
+-- Mirrors Python BehaviorHistory MongoDB document.
+-- ─────────────────────────────────────────────────────────────────────────────
+DEFINE TABLE IF NOT EXISTS behavior_history SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS user_id        ON behavior_history TYPE string;
+DEFINE FIELD IF NOT EXISTS timestamp      ON behavior_history TYPE any;
+-- behavior_type: array of tags e.g. ["chat", "follow-up"]
+DEFINE FIELD IF NOT EXISTS behavior_type  ON behavior_history TYPE array<string>;
+DEFINE FIELD IF NOT EXISTS event_id       ON behavior_history TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS meta           ON behavior_history TYPE option<object>;
+DEFINE FIELD IF NOT EXISTS extend         ON behavior_history TYPE option<object>;
+DEFINE FIELD IF NOT EXISTS is_deleted     ON behavior_history TYPE bool DEFAULT false;
+DEFINE FIELD IF NOT EXISTS created_at     ON behavior_history TYPE any DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS updated_at     ON behavior_history TYPE any DEFAULT time::now();
+
+DEFINE INDEX IF NOT EXISTS idx_bh_user      ON behavior_history FIELDS user_id;
+DEFINE INDEX IF NOT EXISTS idx_bh_ts        ON behavior_history FIELDS timestamp;
+DEFINE INDEX IF NOT EXISTS idx_bh_type      ON behavior_history FIELDS behavior_type;
+DEFINE INDEX IF NOT EXISTS idx_bh_event     ON behavior_history FIELDS event_id;
+DEFINE INDEX IF NOT EXISTS idx_bh_user_ts   ON behavior_history FIELDS user_id, timestamp;
+
 "#;
 
 pub async fn apply(db: &Db) -> anyhow::Result<()> {
