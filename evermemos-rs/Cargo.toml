@@ -17,6 +17,10 @@ path = "src/main.rs"
 name = "evermemos-worker"
 path = "src/worker_main.rs"
 
+[[bin]]
+name = "evermemos-mcp"
+path = "src/mcp_main.rs"
+
 [dependencies]
 # ── Async runtime ────────────────────────────────────────────────────────────
 tokio = { version = "1", features = ["full"] }

@@ -11,6 +11,14 @@ default:
 build:
     cargo build --bin evermemos
 
+# Compile MCP server (debug)
+build-mcp:
+    cargo build --bin evermemos-mcp
+
+# Compile MCP server (release)
+build-mcp-release:
+    cargo build --release --bin evermemos-mcp
+
 # Compile (release, optimised)
 build-release:
     cargo build --release --bin evermemos

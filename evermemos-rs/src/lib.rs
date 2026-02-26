@@ -4,6 +4,7 @@ pub mod biz;
 pub mod config;
 pub mod core;
 pub mod llm;
+pub mod mcp;
 pub mod memory;
 pub mod storage;
 pub mod tasks;
