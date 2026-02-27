@@ -1,13 +1,10 @@
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+//! Compatibility shim — delegates to `core::telemetry`.
+//!
+//! Existing callers that import `core::tracing as app_tracing` and call
+//! `app_tracing::init()` continue to work unchanged.
+//! The returned `TelemetryGuard` must be held for the process lifetime:
+//! ```ignore
+//! let _telemetry = app_tracing::init();
+//! ```
 
-/// Initialise `tracing-subscriber` from the `RUST_LOG` environment variable.
-/// Falls back to `info` level if `RUST_LOG` is unset.
-pub fn init() {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("evermemos=info,tower_http=warn"));
-
-    tracing_subscriber::registry()
-        .with(filter)
-        .with(tracing_subscriber::fmt::layer().compact())
-        .init();
-}
+pub use super::telemetry::{init, TelemetryGuard};

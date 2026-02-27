@@ -58,6 +58,18 @@ dotenvy = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
+# ── OpenTelemetry (OTLP over HTTP/protobuf — no tonic/gRPC) ──────────────────
+opentelemetry = { version = "0.28", features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "0.28", features = ["trace", "metrics", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.28", default-features = false, features = [
+    "trace",
+    "metrics",
+    "http-proto",        # HTTP transport + protobuf body (port 4318)
+    "reqwest-client",    # async reqwest — shares the existing reqwest 0.12 dep
+    "reqwest-rustls",    # rustls TLS — consistent with reqwest's rustls-tls
+] }
+tracing-opentelemetry = "0.29"   # bridges tracing spans → OTEL tracer
+
 # ── Error handling ───────────────────────────────────────────────────────────
 thiserror = "2"
 anyhow = "1"

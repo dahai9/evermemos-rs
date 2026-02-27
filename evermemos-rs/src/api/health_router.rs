@@ -8,9 +8,21 @@ pub fn health_routes() -> Router {
 }
 
 async fn health() -> Json<serde_json::Value> {
+    let otel_enabled = std::env::var("OTEL_ENABLED")
+        .map(|v| matches!(v.to_lowercase().as_str(), "true" | "1" | "yes"))
+        .unwrap_or(false);
+
+    let otel_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:4318".to_string());
+
     Json(json!({
         "status": "ok",
         "service": "evermemos-rs",
-        "version": env!("CARGO_PKG_VERSION")
+        "version": env!("CARGO_PKG_VERSION"),
+        "observability": {
+            "otel_enabled": otel_enabled,
+            "otlp_endpoint": if otel_enabled { otel_endpoint } else { "disabled".to_string() }
+        }
     }))
 }
+

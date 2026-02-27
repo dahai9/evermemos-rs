@@ -8,7 +8,7 @@ use evermemos_rs::api::{
 };
 use evermemos_rs::biz::memorize::MemorizeService;
 use evermemos_rs::config::AppConfig;
-use evermemos_rs::core::{cache::Caches, tenant::TenantContext, tracing as app_tracing};
+use evermemos_rs::core::{cache::Caches, metrics::metrics_middleware, tenant::TenantContext, tracing as app_tracing};
 use evermemos_rs::llm::{
     apply_cassette, openai::OpenAiProvider, rerank::OpenAiReranker, vectorize::OpenAiVectorizer,
 };
@@ -26,8 +26,8 @@ use evermemos_rs::storage::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // ── 1. Tracing ────────────────────────────────────────────────────────────
-    app_tracing::init();
+    // ── 1. Tracing + OTEL (guard must live until end of main) ────────────────
+    let _telemetry = app_tracing::init();
 
     // ── 2. Config ─────────────────────────────────────────────────────────────
     let cfg = AppConfig::load()?;
@@ -147,6 +147,8 @@ async fn main() -> anyhow::Result<()> {
         .merge(global_profile_routes(global_profile_state))
         .merge(behavior_history_routes(bh_state))
         .merge(ui_routes())
+        // HTTP metrics (counter + histogram via OTEL global meter)
+        .layer(axum::middleware::from_fn(metrics_middleware))
         // Tenant middleware — extract org/space from headers, inject TenantContext extension
         .layer(axum::middleware::from_fn({
             let org = org_header;

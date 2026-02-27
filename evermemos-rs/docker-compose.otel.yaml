@@ -1,0 +1,33 @@
+# Local observability stack for evermemos-rs development.
+#
+# Uses grafana/otel-lgtm — a single image that bundles:
+#   • OpenTelemetry Collector (receives OTLP HTTP :4318 / gRPC :4317)
+#   • Tempo            (trace storage + query)
+#   • Mimir / Prometheus (metrics storage + query)
+#   • Grafana          (dashboards at http://localhost:3000, admin/admin)
+#
+# Usage:
+#   docker compose -f docker-compose.otel.yaml up -d
+#   # then start the Rust service with OTEL_ENABLED=true
+#   OTEL_ENABLED=true just start
+#   # open http://localhost:3000 → Explore → Tempo (traces) or Metrics
+
+services:
+  otel-lgtm:
+    image: grafana/otel-lgtm:latest
+    container_name: evermemos-otel-lgtm
+    ports:
+      - "3000:3000"   # Grafana UI  (admin / admin)
+      - "4317:4317"   # OTLP gRPC   (optional, not used by default)
+      - "4318:4318"   # OTLP HTTP   ← OTEL_EXPORTER_OTLP_ENDPOINT
+    environment:
+      # Grafana anonymous access — convenient for local dev
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+    volumes:
+      - otel_lgtm_data:/data
+    restart: unless-stopped
+
+volumes:
+  otel_lgtm_data:
