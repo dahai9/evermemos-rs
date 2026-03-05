@@ -2,25 +2,30 @@ use std::sync::Arc;
 use tracing::info;
 
 use evermemos_rs::agentic::manager::AgenticManager;
+#[cfg(feature = "behavior-history")]
+use evermemos_rs::api::{behavior_history_routes, BehaviorHistoryState};
 use evermemos_rs::api::{
-    behavior_history_routes, global_profile_router::GlobalProfileState, global_profile_routes,
-    health_routes, memory_router::AppState, memory_routes, ui_routes, BehaviorHistoryState,
+    global_profile_router::GlobalProfileState, global_profile_routes, health_routes,
+    memory_router::AppState, memory_routes, ui_routes,
 };
 use evermemos_rs::biz::memorize::MemorizeService;
 use evermemos_rs::config::AppConfig;
-use evermemos_rs::core::{cache::Caches, metrics::metrics_middleware, tenant::TenantContext, tracing as app_tracing};
+use evermemos_rs::core::{
+    cache::Caches, metrics::metrics_middleware, tenant::TenantContext, tracing as app_tracing,
+};
 use evermemos_rs::llm::{
     apply_cassette, openai::OpenAiProvider, rerank::OpenAiReranker, vectorize::OpenAiVectorizer,
 };
 use evermemos_rs::memory::{
     manager::MemoryManager, memcell_extractor::MemCellExtractor, prompts::Locale,
 };
+#[cfg(feature = "behavior-history")]
+use evermemos_rs::storage::repository::BehaviorHistoryRepo;
 use evermemos_rs::storage::{
     db,
     repository::{
-        BehaviorHistoryRepo, ClusterStateRepo, ConversationMetaRepo, EpisodicMemoryRepo,
-        EventLogRepo, ForesightRepo, GroupProfileRepo, MemCellRepo, MemoryRequestLogRepo,
-        UserProfileRepo,
+        ClusterStateRepo, ConversationMetaRepo, EpisodicMemoryRepo, EventLogRepo, ForesightRepo,
+        GroupProfileRepo, MemCellRepo, MemoryRequestLogRepo, UserProfileRepo,
     },
 };
 
@@ -50,6 +55,7 @@ async fn main() -> anyhow::Result<()> {
     let _cs_repo = ClusterStateRepo::new(db.clone());
     let cm_repo = ConversationMetaRepo::new(db.clone());
     let req_log_repo = MemoryRequestLogRepo::new(db.clone());
+    #[cfg(feature = "behavior-history")]
     let bh_repo = BehaviorHistoryRepo::new(db.clone());
 
     // ── 5. Caches ─────────────────────────────────────────────────────────────
@@ -100,6 +106,7 @@ async fn main() -> anyhow::Result<()> {
         fs_repo.clone(),
         el_repo.clone(),
         up_repo.clone(),
+        #[cfg(feature = "behavior-history")]
         bh_repo.clone(),
     ));
 
@@ -133,6 +140,7 @@ async fn main() -> anyhow::Result<()> {
         up_repo: up_repo.clone(),
     };
 
+    #[cfg(feature = "behavior-history")]
     let bh_state = BehaviorHistoryState {
         bh_repo: bh_repo.clone(),
     };
@@ -145,8 +153,12 @@ async fn main() -> anyhow::Result<()> {
     let app = memory_routes(state)
         .merge(health_routes())
         .merge(global_profile_routes(global_profile_state))
-        .merge(behavior_history_routes(bh_state))
-        .merge(ui_routes())
+        .merge(ui_routes());
+
+    #[cfg(feature = "behavior-history")]
+    let app = app.merge(behavior_history_routes(bh_state));
+
+    let app = app
         // HTTP metrics (counter + histogram via OTEL global meter)
         .layer(axum::middleware::from_fn(metrics_middleware))
         // Tenant middleware — extract org/space from headers, inject TenantContext extension

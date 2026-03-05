@@ -115,7 +115,16 @@ impl SearchMemoriesQuery {
                         "event_log_record" | "EVENT_LOG" => MemoryType::EventLogRecord,
                         "profile" | "PROFILE" => MemoryType::Profile,
                         "core_memory" | "CORE_MEMORY" | "CORE" => MemoryType::CoreMemory,
-                        "behavior_history" | "BEHAVIOR" | "BEHAVIOR_HISTORY" => MemoryType::BehaviorHistory,
+                        "behavior_history" | "BEHAVIOR" | "BEHAVIOR_HISTORY" => {
+                            #[cfg(feature = "behavior-history")]
+                            {
+                                MemoryType::BehaviorHistory
+                            }
+                            #[cfg(not(feature = "behavior-history"))]
+                            {
+                                MemoryType::EpisodicMemory
+                            }
+                        }
                         _ => MemoryType::EpisodicMemory,
                     })
                     .collect()

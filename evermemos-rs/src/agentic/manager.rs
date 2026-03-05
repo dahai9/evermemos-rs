@@ -12,9 +12,10 @@ use super::{
 use crate::llm::provider::{complete_json, LlmMessage, LlmProvider};
 use crate::llm::rerank::RerankService;
 use crate::llm::vectorize::VectorizeService;
+#[cfg(feature = "behavior-history")]
+use crate::storage::repository::BehaviorHistoryRepo;
 use crate::storage::repository::{
-    BehaviorHistoryRepo, DateRange, EpisodicMemoryRepo, EventLogRepo, ForesightRepo, SearchResult,
-    UserProfileRepo,
+    DateRange, EpisodicMemoryRepo, EventLogRepo, ForesightRepo, SearchResult, UserProfileRepo,
 };
 
 /// Retrieval method matching the Python `RetrieveMethod` enum.
@@ -39,6 +40,7 @@ pub enum MemoryType {
     /// Highest-priority structured user profile (mirrors Python `core_memory` collection).
     /// Backed by the same `user_profile` table; exposed with `memory_type = "core_memory"`.
     CoreMemory,
+    #[cfg(feature = "behavior-history")]
     BehaviorHistory,
     All,
 }
@@ -84,6 +86,7 @@ pub struct AgenticManager {
     fs_repo: ForesightRepo,
     el_repo: EventLogRepo,
     up_repo: UserProfileRepo,
+    #[cfg(feature = "behavior-history")]
     bh_repo: BehaviorHistoryRepo,
 }
 
@@ -96,7 +99,7 @@ impl AgenticManager {
         fs_repo: ForesightRepo,
         el_repo: EventLogRepo,
         up_repo: UserProfileRepo,
-        bh_repo: BehaviorHistoryRepo,
+        #[cfg(feature = "behavior-history")] bh_repo: BehaviorHistoryRepo,
     ) -> Self {
         Self {
             llm,
@@ -106,6 +109,7 @@ impl AgenticManager {
             fs_repo,
             el_repo,
             up_repo,
+            #[cfg(feature = "behavior-history")]
             bh_repo,
         }
     }
@@ -179,6 +183,7 @@ impl AgenticManager {
                         }
                     }
                 }
+                #[cfg(feature = "behavior-history")]
                 MemoryType::BehaviorHistory => {
                     // BehaviorHistory has no BM25 index; return time-sorted list.
                     if let Some(uid_str) = uid {
@@ -248,6 +253,7 @@ impl AgenticManager {
                         }
                     }
                 }
+                #[cfg(feature = "behavior-history")]
                 MemoryType::BehaviorHistory => {
                     // No HNSW index on behavior_history; fall back to time-sorted list.
                     if let Some(uid_str) = uid {
@@ -547,6 +553,7 @@ fn cm_to_item(profile: crate::storage::models::UserProfile) -> MemoryItem {
     }
 }
 
+#[cfg(feature = "behavior-history")]
 fn bh_to_item(b: crate::storage::models::BehaviorHistory) -> MemoryItem {
     let id = b.id.as_ref().map(|t| t.to_raw()).unwrap_or_default();
     let content = b.behavior_type.join(", ");

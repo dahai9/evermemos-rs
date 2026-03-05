@@ -36,6 +36,9 @@
 //!    - `add_memory`       — store a single message
 //!    - `add_conversation` — store a full user+assistant turn at once
 //!    - `get_profile`      — retrieve user profile / core memory
+//!    - `add_behavior_history` — store one behavior-history record (feature: `behavior-history`)
+//!    - `list_behavior_history` — list behavior-history records (feature: `behavior-history`)
+//!    - `get_behavior_history_stats` — get behavior-history stats (feature: `behavior-history`)
 
 use evermemos_rs::mcp;
 

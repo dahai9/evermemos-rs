@@ -1,3 +1,4 @@
+#[cfg(feature = "behavior-history")]
 pub mod behavior_history;
 pub mod cluster_state;
 pub mod conversation_meta;
@@ -9,6 +10,7 @@ pub mod memcell;
 pub mod request_log;
 pub mod user_profile;
 
+#[cfg(feature = "behavior-history")]
 pub use behavior_history::BehaviorHistoryRepo;
 pub use cluster_state::ClusterStateRepo;
 pub use conversation_meta::ConversationMetaRepo;

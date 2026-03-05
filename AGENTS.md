@@ -1,22 +1,21 @@
 # AGENTS.md - AI Assistant Guide for EverMemOS
 
-> This file provides project context for AI coding assistants (Claude Code, GitHub Copilot, Cursor, Codeium, etc.) to better understand and work with this project.
+> This file provides project context for AI coding assistants (Claude Code, GitHub Copilot, Cursor, Codeium, etc.) to better understand and work with this repository.
 >
-> **Maintainer Note**: Keep this file updated when project structure changes.
+> **Maintainer Note**: Keep this file updated when either Python (`src/`) or Rust (`evermemos-rs/`) structure changes.
 
 ## Project Summary
 
-**EverMemOS** is an enterprise-grade long-term memory system for conversational AI agents.
+**EverMemOS** currently has **two active implementations** in this mono-repo:
 
-| Attribute | Value |
-|-----------|-------|
-| Language | Python 3.12 |
-| Framework | FastAPI + LangChain |
-| Package Manager | uv |
-| Version | v1.1.0 |
-| License | Apache 2.0 |
+| System | Location | Status | Primary Use |
+|--------|----------|--------|-------------|
+| Python EverMemOS | `src/` | Stable / feature-complete baseline | Production architecture reference |
+| Rust evermemos-rs | `evermemos-rs/` | Active rewrite | Lightweight deployment, simpler infra |
 
-## Architecture
+## Architecture (Dual-System)
+
+### Python Architecture (`src/`)
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -47,11 +46,42 @@
 └─────────────────────────────────────────────────────┘
 ```
 
-## Directory Structure
+### Rust Architecture (`evermemos-rs/src/`)
+
+```
+┌─────────────────────────────────────────────────────┐
+│                API Layer (Axum)                     │
+│                    api/                             │
+├─────────────────────────────────────────────────────┤
+│              Agentic Retrieval Layer                │
+│            (Keyword/Vector/Hybrid/RRF/Agentic)     │
+│                   agentic/                          │
+├─────────────────────────────────────────────────────┤
+│               Memory Extraction Layer               │
+│      (MemCell, Episode, Profile, Foresight, etc.)  │
+│                    memory/                          │
+├─────────────────────────────────────────────────────┤
+│                 Storage Layer                       │
+│      (SurrealDB schema + models + repositories)     │
+│                    storage/                         │
+├─────────────────────────────────────────────────────┤
+│               Core Runtime Layer                    │
+│   (error, tracing, telemetry, metrics, tenant)      │
+│                     core/                           │
+├─────────────────────────────────────────────────────┤
+│             Protocol/Worker Layer                   │
+│      (MCP stdio server, NATS worker)                │
+│           mcp/, tasks/, worker_main.rs              │
+└─────────────────────────────────────────────────────┘
+```
+
+## Directory Structure (Key Paths)
+
+### Python System
 
 ```
 EverMemOS/
-├── src/                          # Main source code
+├── src/
 │   ├── run.py                    # Application entry point
 │   ├── app.py                    # FastAPI app configuration
 │   ├── base_app.py               # Base application setup
@@ -70,157 +100,132 @@ EverMemOS/
 │   │   ├── fetch_mem_service.py  # Memory retrieval
 │   │   ├── agentic_utils.py      # Agentic utilities
 │   │   ├── retrieval_utils.py    # Retrieval utilities
-│   │   ├── vectorize_base.py     # Base vectorizer
-│   │   ├── vectorize_vllm.py     # VLLM vectorizer
-│   │   ├── vectorize_deepinfra.py # DeepInfra vectorizer
-│   │   ├── rerank_vllm.py        # VLLM reranker
-│   │   ├── rerank_deepinfra.py   # DeepInfra reranker
-│   │   └── metrics/              # Performance metrics
+│   │   ├── metrics/              # Performance metrics
+│   │   └── ...
 │   │
-│   ├── memory_layer/             # Memory extraction
-│   │   ├── memory_manager.py     # Memory extraction coordinator
-│   │   ├── constants.py          # Constants
-│   │   ├── memcell_extractor/    # Atomic memory extraction
-│   │   ├── memory_extractor/     # High-level extractors
-│   │   │   ├── episode_memory_extractor.py
-│   │   │   ├── profile_memory_extractor.py
-│   │   │   ├── group_profile_memory_extractor.py
-│   │   │   ├── foresight_extractor.py
-│   │   │   └── event_log_extractor.py
+│   ├── memory_layer/             # Memory extraction pipeline
+│   │   ├── memory_manager.py     # Extraction coordinator
+│   │   ├── constants.py          # Memory constants
+│   │   ├── memcell_extractor/    # MemCell boundary extraction
+│   │   ├── memory_extractor/     # Episode/Profile/Foresight/EventLog extractors
 │   │   ├── cluster_manager/      # Memory clustering
-│   │   ├── profile_manager/      # Profile management
-│   │   ├── llm/                  # LLM providers
-│   │   │   ├── llm_provider.py
-│   │   │   ├── openai_provider.py
-│   │   │   ├── protocol.py
-│   │   │   └── config.py
-│   │   └── prompts/              # Prompt templates
-│   │       ├── en/               # English prompts
-│   │       └── zh/               # Chinese prompts
-│   │
-│   ├── core/                     # Framework infrastructure
-│   │   ├── di/                   # Dependency injection
-│   │   ├── tenants/              # Multi-tenancy
-│   │   ├── middleware/           # HTTP middleware
-│   │   ├── cache/                # Caching layer
-│   │   ├── events/               # Event system
-│   │   ├── addons/               # Plugin framework
-│   │   ├── asynctasks/           # Async task framework
-│   │   ├── authorize/            # Authorization
-│   │   ├── capability/           # Capability framework
-│   │   ├── class_annotations/    # Class annotations
-│   │   ├── component/            # Component system
-│   │   ├── config/               # Configuration
-│   │   ├── constants/            # Constants
-│   │   ├── context/              # Context management
-│   │   ├── interface/            # Interface definitions
-│   │   ├── lifespan/             # FastAPI lifespan
-│   │   ├── lock/                 # Distributed locks
-│   │   ├── longjob/              # Long-running jobs
-│   │   ├── nlp/                  # NLP utilities
-│   │   ├── observation/          # Logging & observability
-│   │   ├── oxm/                  # Object mapping base
-│   │   ├── queue/                # Queue management
-│   │   ├── rate_limit/           # Rate limiting
-│   │   └── request/              # Request handling
+│   │   ├── profile_manager/      # Profile aggregation
+│   │   ├── llm/                  # LLM abstraction/providers
+│   │   └── prompts/              # Prompt templates (en/zh)
 │   │
 │   ├── infra_layer/              # External adapters
 │   │   ├── adapters/
-│   │   │   ├── input/            # Inbound adapters
-│   │   │   │   ├── api/          # REST controllers
-│   │   │   │   │   ├── memory/   # Memory API
-│   │   │   │   │   ├── health/   # Health check
-│   │   │   │   │   ├── status/   # Status API
-│   │   │   │   │   ├── dto/      # Data transfer objects
-│   │   │   │   │   └── mapper/   # Request mappers
-│   │   │   │   ├── jobs/         # Job handlers
-│   │   │   │   ├── mcp/          # MCP protocol
-│   │   │   │   └── mq/           # Message queue consumers
-│   │   │   └── out/              # Outbound adapters
-│   │   │       ├── persistence/  # Data persistence
-│   │   │       │   ├── document/memory/  # MongoDB documents
-│   │   │       │   ├── repository/       # Data repositories
-│   │   │       │   └── mapper/           # Data mappers
-│   │   │       ├── search/       # Search adapters
-│   │   │       │   ├── milvus/   # Vector search
-│   │   │       │   │   ├── memory/       # Collections
-│   │   │       │   │   └── converter/    # Converters
-│   │   │       │   ├── elasticsearch/    # Full-text search
-│   │   │       │   │   ├── memory/       # Indices
-│   │   │       │   │   └── converter/    # Converters
-│   │   │       │   └── repository/       # Search repositories
-│   │   │       └── event/        # Event publishers
-│   │   └── scripts/              # Infrastructure scripts
-│   │       └── migrations/       # DB migrations
+│   │   │   ├── input/            # API, jobs, mcp, mq consumers
+│   │   │   └── out/              # Persistence/search/event adapters
+│   │   └── scripts/              # Infra scripts and migrations
 │   │
-│   ├── biz_layer/                # Business logic
-│   │   ├── mem_memorize.py       # Memorization logic
-│   │   ├── mem_db_operations.py  # Database operations
-│   │   ├── mem_sync.py           # Data synchronization
-│   │   └── memorize_config.py    # Memorization config
-│   │
+│   ├── biz_layer/                # Business workflows
 │   ├── service/                  # Service implementations
-│   │   ├── memory_request_log_service.py
-│   │   ├── conversation_meta_service.py
-│   │   ├── request_status_service.py
-│   │   └── memcell_delete_service.py
-│   │
-│   ├── api_specs/                # API specifications
-│   │   ├── memory_models.py      # Memory data models
-│   │   ├── memory_types.py       # Memory type enums
-│   │   ├── request_converter.py  # Request converters
-│   │   └── dtos/                 # Data transfer objects
-│   │
-│   ├── common_utils/             # Shared utilities
-│   │   ├── language_utils.py     # Language detection
-│   │   ├── text_utils.py         # Text processing
-│   │   ├── datetime_utils.py     # Date/time helpers
-│   │   ├── url_extractor.py      # URL extraction
-│   │   ├── base62_utils.py       # Base62 encoding
-│   │   ├── cli_ui.py             # CLI utilities
-│   │   ├── app_meta.py           # App metadata
-│   │   ├── project_path.py       # Project paths
-│   │   └── load_env.py           # Environment loading
-│   │
-│   ├── migrations/               # Database migrations
-│   │   ├── mongodb/              # MongoDB migrations
-│   │   └── postgresql/           # PostgreSQL migrations
-│   │
-│   ├── config/                   # Configuration files
-│   │   └── stopwords/            # Stopword lists
-│   │
-│   └── devops_scripts/           # DevOps utilities
-│       ├── data_fix/             # Data repair scripts
-│       ├── i18n/                 # Internationalization
-│       └── sensitive_info/       # Sensitive data handling
+│   ├── core/                     # Framework infrastructure (DI/middleware/tenant/cache)
+│   ├── api_specs/                # DTOs, memory models, enums
+│   ├── common_utils/             # Shared utility library
+│   ├── migrations/               # DB migrations
+│   ├── config/                   # App config data (e.g. stopwords)
+│   └── devops_scripts/           # DevOps helper scripts
 │
-├── tests/                        # Test suite
-├── demo/                         # Demo examples
-│   ├── simple_demo.py
-│   ├── chat_with_memory.py
-│   ├── extract_memory.py
-│   ├── chat/                     # Chat interface
-│   ├── config/                   # Demo configs
-│   ├── tools/                    # Demo tools
-│   └── utils/                    # Demo utilities
-├── docs/                         # Documentation
+├── tests/                        # Python test suite
+├── demo/                         # Python demos and scripts
+├── docs/                         # Global documentation
 ├── evaluation/                   # Evaluation framework
-├── data/                         # Sample data
-├── data_format/                  # Data format specs
-├── figs/                         # Figures/images
+├── data/                         # Sample datasets
+├── data_format/                  # Input format specs
+└── figs/                         # Figures/images
+```
+
+### Rust System
+
+```
+EverMemOS/evermemos-rs/
+├── Cargo.toml                    # Rust dependencies + features
+├── Cargo.lock                    # Rust dependency lockfile
+├── .env / .env.template          # Rust runtime configuration
+├── justfile                      # Build/run/test task shortcuts
+├── src/
+│   ├── main.rs                   # HTTP server binary
+│   ├── mcp_main.rs               # MCP stdio binary
+│   ├── worker_main.rs            # Worker binary
+│   ├── lib.rs                    # Module exports
+│   │
+│   ├── api/                      # Axum routers + DTO mapping
+│   │   ├── memory_router.rs      # /api/v1/memories* routes
+│   │   ├── global_profile_router.rs
+│   │   ├── behavior_history_router.rs  # feature-gated
+│   │   ├── health_router.rs
+│   │   ├── ui_router.rs
+│   │   ├── dto.rs
+│   │   ├── middleware.rs
+│   │   └── mod.rs
+│   │
+│   ├── agentic/                  # Retrieval manager + strategies
+│   │   ├── manager.rs            # KEYWORD/VECTOR/HYBRID/RRF/AGENTIC orchestration
+│   │   ├── retrieval_utils.rs
+│   │   ├── prompts.rs
+│   │   ├── strategies/
+│   │   └── mod.rs
+│   │
+│   ├── memory/                   # Memory extraction pipeline
+│   │   ├── manager.rs
+│   │   ├── memcell_extractor.rs
+│   │   ├── episode_extractor.rs
+│   │   ├── profile_extractor.rs
+│   │   ├── group_profile_extractor.rs
+│   │   ├── foresight_extractor.rs
+│   │   ├── event_log_extractor.rs
+│   │   ├── cluster_manager.rs
+│   │   ├── prompts/
+│   │   └── mod.rs
+│   │
+│   ├── storage/                  # SurrealDB schema/models/repos
+│   │   ├── db.rs                 # DB init/connect
+│   │   ├── schema.rs             # SurrealDB DDL
+│   │   ├── models/               # Domain data models
+│   │   ├── repository/           # Data access repositories
+│   │   └── mod.rs
+│   │
+│   ├── core/                     # Runtime foundation
+│   │   ├── error.rs              # AppError definitions
+│   │   ├── tracing.rs            # tracing bootstrap
+│   │   ├── telemetry.rs          # OTEL init/shutdown guard
+│   │   ├── metrics.rs            # HTTP metrics middleware
+│   │   ├── tenant.rs             # tenant context
+│   │   ├── cache.rs              # in-process cache
+│   │   └── mod.rs
+│   │
+│   ├── llm/                      # LLM provider/vector/rerank adapters
+│   │   ├── provider.rs
+│   │   ├── openai.rs
+│   │   ├── vectorize.rs
+│   │   ├── rerank.rs
+│   │   ├── cassette.rs
+│   │   └── mod.rs
+│   │
+│   ├── mcp/                      # MCP JSON-RPC implementation
+│   │   └── mod.rs
+│   │
+│   ├── tasks/                    # Background task workers
+│   │   ├── nats_worker.rs
+│   │   ├── task_types.rs
+│   │   └── mod.rs
+│   │
+│   └── config.rs                 # Rust app config schema
 │
-├── docker-compose.yaml           # Infrastructure stack
-├── Dockerfile                    # Container build
-├── pyproject.toml                # Project dependencies
-├── Makefile                      # Build commands
-├── config.json                   # App configuration
-├── env.template                  # Environment template
-├── pytest.ini                    # Pytest config
-├── pyrightconfig.json            # Type checker config
-└── .pre-commit-config.yaml       # Pre-commit hooks
+├── docs/
+│   ├── MCP_AGENT_RULES.md        # MCP behavior and integration rules
+│   └── RUST_VS_PYTHON.md         # Rewrite parity/差异说明
+├── static/                       # Embedded UI/static resources
+├── data/                         # Local data folder (rocksdb files etc.)
+├── demo/                         # Rust-side demo/parity scripts
+└── docker-compose.otel.yaml      # Local observability stack
 ```
 
 ## Tech Stack
+
+### Python System
 
 | Category | Technology |
 |----------|------------|
@@ -234,170 +239,213 @@ EverMemOS/
 | Validation | Pydantic 2.x |
 | Package Manager | uv |
 
+### Rust System
+
+| Category | Technology |
+|----------|------------|
+| Web Framework | Axum + Tower |
+| Runtime | Tokio |
+| Storage | SurrealDB (RocksDB backend) |
+| Search | SurrealDB BM25 + HNSW |
+| LLM Integration | async-openai (OpenAI-compatible) |
+| Queue | NATS (async-nats) |
+| Cache | moka (in-process) |
+| Observability | tracing + OpenTelemetry (OTLP HTTP) |
+| Package Manager | Cargo |
+
 ## Code Conventions
 
-### Style
+### Python (`src/`)
 - **Formatter**: Black (line width 88)
 - **Import Sorting**: isort
 - **Type Checker**: Pyright
-- **Naming**: PEP 8 conventions
+- **Pattern**: Async/await + repository/adapter pattern + DI
 
-### Patterns
-- Async/await for all I/O operations
-- Dependency injection via `core/di/`
-- Repository pattern for data access
-- Adapter pattern for external services
+### Rust (`evermemos-rs/src/`)
+- **Formatter**: rustfmt (`cargo fmt`)
+- **Lint**: clippy (`cargo clippy -- -D warnings`)
+- **Pattern**: async-first, explicit typed DTO/model, repository-based data access
+- **Feature Flags**: optional modules gated in `Cargo.toml` features (e.g. `behavior-history`)
 
-### File Naming
-- Snake_case for modules: `memory_manager.py`
-- Classes in PascalCase: `MemoryManager`
-- Constants in UPPER_CASE: `DEFAULT_TIMEOUT`
+## Key Entry Points
 
-## Key Abstractions
+### Python
+- `src/run.py` - app entry
+- `src/agentic_layer/memory_manager.py` - core memory orchestration
+- `src/infra_layer/adapters/input/api/` - REST controllers
 
-### Memory Types
-| Type | Description | Location |
-|------|-------------|----------|
-| MemCell | Atomic memory unit | `memory_layer/memcell_extractor/` |
-| Episode | Aggregated memories by topic | `memory_layer/memory_extractor/episode_memory_extractor.py` |
-| Profile | User characteristics | `memory_layer/memory_extractor/profile_memory_extractor.py` |
-| GroupProfile | Group chat memories | `memory_layer/memory_extractor/group_profile_memory_extractor.py` |
-| Foresight | Predictive memories | `memory_layer/memory_extractor/foresight_extractor.py` |
-| EventLog | Timeline events | `memory_layer/memory_extractor/event_log_extractor.py` |
+### Rust
+- `evermemos-rs/src/main.rs` - API server entry
+- `evermemos-rs/src/agentic/manager.rs` - retrieval orchestrator
+- `evermemos-rs/src/mcp/mod.rs` - MCP protocol implementation
+- `evermemos-rs/src/storage/schema.rs` - DB schema definition
 
-### Retrieval Strategies
-| Strategy | Description |
-|----------|-------------|
-| KEYWORD | BM25 keyword search |
-| VECTOR | Milvus vector similarity |
-| HYBRID | Combined keyword + vector |
-| RRF | Reciprocal Rank Fusion |
-| AGENTIC | LLM-guided multi-turn retrieval |
+## Memory Types (Cross-System Concept)
+
+| Type | Python | Rust | Notes |
+|------|:------:|:----:|-------|
+| MemCell | ✅ | ✅ | Atomic conversational boundary unit |
+| Episode | ✅ | ✅ | Episodic memory |
+| Profile | ✅ | ✅ | User profile memory |
+| GroupProfile | ✅ | ✅ | Group-level profile memory |
+| Foresight | ✅ | ✅ | Predictive memory |
+| EventLog | ✅ | ✅ | Atomic event facts |
+| BehaviorHistory | ✅ | ✅* | Rust is feature-gated (`behavior-history`) |
+
+## Retrieval Strategies
+
+| Strategy | Python | Rust |
+|----------|:------:|:----:|
+| KEYWORD | ✅ | ✅ |
+| VECTOR | ✅ | ✅ |
+| HYBRID | ✅ | ✅ |
+| RRF | ✅ | ✅ |
+| AGENTIC | ✅ | ✅ |
 
 ## Database Schema
 
-### MongoDB Collections
-Located in `infra_layer/adapters/out/persistence/document/memory/`:
-- `EpisodicMemory` - Episodic memories
-- `UserProfile` - User profiles
-- `GroupProfile` - Group profiles
-- `GroupUserProfileMemory` - Group user profile memories
-- `MemCell` - Atomic memory units
-- `Entity` - Entities
-- `Relationship` - Relationships
-- `CoreMemory` - Core memories
-- `EventLogRecord` - Event logs
-- `ForesightRecord` - Foresight records
-- `BehaviorHistory` - Behavior history
-- `ConversationMeta` - Conversation metadata
-- `ConversationStatus` - Conversation status
-- `ClusterState` - Cluster state
+### Python System
+- MongoDB documents: `src/infra_layer/adapters/out/persistence/document/memory/`
+- Milvus collections: `src/infra_layer/adapters/out/search/milvus/memory/`
+- Elasticsearch indices: `src/infra_layer/adapters/out/search/elasticsearch/memory/`
 
-### Milvus Collections
-Located in `infra_layer/adapters/out/search/milvus/memory/`:
-- `EpisodicMemoryCollection` - Episodic memory vectors
-- `EventLogCollection` - Event log vectors
-- `ForesightCollection` - Foresight memory vectors
-
-### Elasticsearch Indices
-Located in `infra_layer/adapters/out/search/elasticsearch/memory/`:
-- `episodic_memory` - Episodic memory full-text index
-- `event_log` - Event log index
-- `foresight` - Foresight memory index
+### Rust System
+- Schema file: `evermemos-rs/src/storage/schema.rs`
+- Physical engine: SurrealDB with RocksDB
+- Tables include: `memcell`, `episodic_memory`, `foresight_record`, `event_log_record`, `user_profile`, `group_profile`, `memory_request_log`, and optional `behavior_history`
 
 ## Common Commands
 
+### Python System
+
 ```bash
 # Development
-uv sync                          # Install dependencies
-make run                         # Run application
-python src/run.py                # Alternative run
+uv sync
+make run
+python src/run.py
 
 # Testing
-pytest                           # Run all tests
-pytest tests/test_memory_layer/  # Specific tests
-pytest --cov=src                 # With coverage
+pytest
+pytest tests/test_memory_layer/
+pytest --cov=src
 
-# Code Quality
-black src/                       # Format code
-isort src/                       # Sort imports
-pyright                          # Type check
-make format                      # Format all
+# Code quality
+black src/
+isort src/
+pyright
 
 # Infrastructure
-docker-compose up -d             # Start databases
-docker-compose down              # Stop databases
-docker-compose logs -f           # View logs
+docker-compose up -d
+docker-compose down
+```
+
+### Rust System
+
+```bash
+cd evermemos-rs
+
+# Build/check
+cargo check
+cargo build --bin evermemos
+cargo fmt
+cargo clippy -- -D warnings
+
+# Run
+cargo run --bin evermemos
+cargo run --bin evermemos-mcp
+just start
+just stop
+
+# Optional feature
+cargo run --bin evermemos --features behavior-history
+cargo check --features behavior-history
 ```
 
 ## Environment Variables
 
-Required in `.env` (copy from `env.template`):
+### Python (`.env` from `env.template`)
+- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY`
+- `MONGODB_URI`, `REDIS_URL`, `MILVUS_HOST`, `ELASTICSEARCH_URL`
 
-```bash
-# LLM (at least one required)
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-GOOGLE_API_KEY=
-
-# Databases (defaults work with docker-compose)
-MONGODB_URI=mongodb://localhost:27017
-REDIS_URL=redis://localhost:6379
-MILVUS_HOST=localhost
-ELASTICSEARCH_URL=http://localhost:19200
-```
+### Rust (`evermemos-rs/.env`)
+- `OPENAI_API_KEY`, `OPENAI_BASE_URL`, model/vector/rerank related keys
+- `SURREAL_ENDPOINT` (defaults to local rocksdb)
+- `NATS_URL` and worker-related keys
+- MCP: `EVERMEMOS_BASE_URL`, `EVERMEMOS_GROUP_ID`, `EVERMEMOS_USER_ID`
+- OTEL: `OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`
 
 ## Development Guidelines
 
-### Adding a New Memory Type
-1. Define enum in `src/api_specs/memory_types.py`
-2. Create extractor in `src/memory_layer/memory_extractor/`
-3. Add MongoDB document in `src/infra_layer/adapters/out/persistence/document/memory/`
-4. Create repository in `src/infra_layer/adapters/out/persistence/repository/`
-5. Add vector collection if needed in `src/infra_layer/adapters/out/search/milvus/memory/`
-6. Add ES index if needed in `src/infra_layer/adapters/out/search/elasticsearch/memory/`
+### When modifying Python code
+1. Stay under `src/` and mirror existing layer boundaries.
+2. Keep async APIs and DI style consistent.
+3. Update tests under `tests/` where relevant.
 
-### Adding a New API Endpoint
-1. Create controller in `src/infra_layer/adapters/input/api/`
-2. Define request/response DTOs in `src/api_specs/dtos/`
-3. Implement service in `src/service/`
-4. Register route in app configuration (`src/app.py`)
+### When modifying Rust code
+1. Keep changes under `evermemos-rs/` modular boundaries (`api/agentic/memory/storage/core`).
+2. Prefer typed DTOs and repository methods over ad-hoc query strings in handlers.
+3. If adding optional capability, prefer a Cargo feature (default off unless required).
+4. Validate both default and feature-enabled builds when touching feature-gated code.
 
-### Adding a New LLM Provider
-1. Create provider in `src/memory_layer/llm/`
-2. Implement `LLMProvider` interface from `protocol.py`
-3. Register in DI container
+## Commit Workflow (evermemos-rs)
+
+When committing code changes under `evermemos-rs/`, follow this process:
+
+1. Commit code changes first:
+  ```bash
+  git add -A
+  git commit -m "fix|feat|refactor: ..."
+  ```
+2. Create/update a solution note in `evermemos-rs/.solution/` for that commit.
+3. Amend the solution note into the same commit (do not create a new commit just for docs):
+  ```bash
+  HASH=$(git rev-parse --short HEAD)
+  MSG=$(git log -1 --format="%s" | tr ' :' '--' | tr '[:upper:]' '[:lower:]')
+  touch evermemos-rs/.solution/${HASH}-${MSG}.md
+  git add evermemos-rs/.solution/
+  git commit --amend --no-edit
+  ```
+
+### `.solution` naming and required content
+
+- File naming: `.solution/{short_hash}-{commit_message_slugified}.md`
+- Include sections: background, root cause (if bug fix), solution, impacted files, validation.
+
+### Recursion guard
+
+- ✅ Correct: `code commit` → `write .solution doc` → `git commit --amend --no-edit`
+- ❌ Avoid: separate `docs:` commit only for `.solution` notes (causes recursive bookkeeping)
+- Pure documentation commits (README/CHANGELOG/.solution README补档) can skip `.solution` note.
 
 ## Important Considerations
 
-1. **Multi-tenancy**: All data operations are tenant-scoped via `core/tenants/`
-2. **Async First**: Use `async/await` for all I/O operations
-3. **Type Safety**: Add type hints to all functions
-4. **Error Handling**: Use custom exceptions from `core/`
-5. **Logging**: Use logger from `core/observation/logger.py`
-6. **Configuration**: Main config in `config.json`, env variables in `.env`
+1. **Dual-system repo**: confirm target system (`src/` vs `evermemos-rs/`) before coding.
+2. **Feature parity work**: Rust rewrite may intentionally diverge in infra implementation.
+3. **Async first**: both systems are async-heavy and I/O-bound.
+4. **Prompt consistency**: memory extraction behavior depends on prompt templates in each system.
+5. **Tenant/context safety**: preserve request context handling in API/middleware paths.
 
 ## Documentation References
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Setup Guide](docs/installation/SETUP.md)
-- [Docker Setup](docs/installation/DOCKER_SETUP.md)
-- [API Reference](docs/api_docs/memory_api.md)
-- [Development Guide](docs/dev_docs/development_guide.md)
-- [Usage Examples](docs/usage/USAGE_EXAMPLES.md)
-- [Configuration Guide](docs/usage/CONFIGURATION_GUIDE.md)
+### Python docs
+- `docs/ARCHITECTURE.md`
+- `docs/installation/SETUP.md`
+- `docs/api_docs/memory_api.md`
+- `docs/dev_docs/development_guide.md`
+
+### Rust docs
+- `evermemos-rs/docs/RUST_VS_PYTHON.md`
+- `evermemos-rs/docs/MCP_AGENT_RULES.md`
 
 ## Testing Approach
 
-- Unit tests in `tests/` mirroring `src/` structure
-- Use pytest fixtures for database mocking
-- Async tests with `pytest-asyncio`
-- Integration tests require running infrastructure (`docker-compose up -d`)
+### Python
+- Unit tests in `tests/` mirroring `src/`
+- `pytest-asyncio` for async coverage
 
-## Demos
-
-Located in `demo/` directory:
-- `simple_demo.py` - Basic usage
-- `chat_with_memory.py` - Interactive chat with memory
-- `extract_memory.py` - Memory extraction example
-- `tools/` - Additional demo tools and utilities
+### Rust
+- `cargo test` for Rust unit/integration tests
+- `just test-completeness` / `just test-parity` for parity checks
+- For feature-gated modules, compile both:
+  - `cargo check`
+  - `cargo check --features behavior-history`
