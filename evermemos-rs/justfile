@@ -35,6 +35,18 @@ fmt:
 lint:
     cargo clippy -- -D warnings
 
+# Install server + MCP binaries to Cargo bin directory (~/.cargo/bin by default)
+install:
+    cargo install --path . --bin evermemos --bin evermemos-mcp --force
+
+# Install server + MCP binaries with BehaviorHistory feature enabled
+install-behavior-history:
+    cargo install --path . --features behavior-history --bin evermemos --bin evermemos-mcp --force
+
+# Remove installed server + MCP binaries
+uninstall:
+    cargo uninstall evermemos-rs || true
+
 # ── Server ────────────────────────────────────────────────────────────────────
 
 LOG := "/tmp/evermemos.log"
