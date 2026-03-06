@@ -41,11 +41,17 @@
 //! ```
 
 use chrono::Utc;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::env;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::Mutex;
 use uuid::Uuid;
+
+static PENDING_HISTORY: Lazy<Mutex<HashMap<String, Vec<Value>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JSON-RPC 2.0 wire types
@@ -118,8 +124,7 @@ impl McpConfig {
                 .unwrap_or_else(|_| "http://localhost:8080".to_string()),
             group_id: env::var("EVERMEMOS_GROUP_ID")
                 .unwrap_or_else(|_| "default_group".to_string()),
-            user_id: env::var("EVERMEMOS_USER_ID")
-                .unwrap_or_else(|_| "default_user".to_string()),
+            user_id: env::var("EVERMEMOS_USER_ID").unwrap_or_else(|_| "default_user".to_string()),
             api_key: env::var("EVERMEMOS_API_KEY").unwrap_or_default(),
             retrieve_method: env::var("EVERMEMOS_RETRIEVE_METHOD")
                 .unwrap_or_else(|_| "hybrid".to_string()),
@@ -432,6 +437,10 @@ fn add_auth(req: reqwest::RequestBuilder, cfg: &McpConfig) -> reqwest::RequestBu
     }
 }
 
+fn pending_key(cfg: &McpConfig) -> String {
+    format!("{}::{}", cfg.group_id, cfg.user_id)
+}
+
 /// POST /api/v1/memories — store a single message
 async fn api_add_single(
     client: &reqwest::Client,
@@ -441,20 +450,57 @@ async fn api_add_single(
     role: impl Into<String>,
 ) -> anyhow::Result<Value> {
     let url = format!("{}/api/v1/memories", cfg.base_url);
+    let content = content.into();
+    let sender = sender.into();
+    let role = role.into();
+    let message_id = Uuid::new_v4().to_string();
+    let create_time = Utc::now().to_rfc3339();
+    let current_message = json!({
+        "message_id": message_id.clone(),
+        "create_time": create_time.clone(),
+        "sender": sender.clone(),
+        "content": content.clone(),
+        "role": role.clone(),
+    });
+
+    let key = pending_key(cfg);
+    let history = {
+        let guard = PENDING_HISTORY.lock().await;
+        guard.get(&key).cloned().unwrap_or_default()
+    };
+
     let body = json!({
-        "message_id": Uuid::new_v4().to_string(),
-        "create_time": Utc::now().to_rfc3339(),
-        "sender": sender.into(),
-        "content": content.into(),
-        "role": role.into(),
+        "message_id": message_id,
+        "create_time": create_time,
+        "sender": sender,
+        "content": content,
+        "role": role,
         "group_id": cfg.group_id,
         "user_id": cfg.user_id,
+        "history": history,
     });
     let resp = add_auth(client.post(&url).json(&body), cfg)
         .send()
         .await?
         .json::<Value>()
         .await?;
+
+    let status = resp
+        .get("result")
+        .and_then(|v| v.get("status"))
+        .and_then(Value::as_str);
+
+    let mut guard = PENDING_HISTORY.lock().await;
+    match status {
+        Some("accumulating") => {
+            guard.entry(key).or_default().push(current_message);
+        }
+        Some("extracted") => {
+            guard.remove(&key);
+        }
+        _ => {}
+    }
+
     Ok(resp)
 }
 
@@ -476,15 +522,13 @@ async fn tool_search(
 
     let url = format!("{}/api/v1/memories/search", cfg.base_url);
     let resp = add_auth(
-        client
-            .get(&url)
-            .query(&[
-                ("query", query.as_str()),
-                ("group_id", cfg.group_id.as_str()),
-                ("user_id", cfg.user_id.as_str()),
-                ("top_k", top_k.as_str()),
-                ("retrieve_method", method.as_str()),
-            ]),
+        client.get(&url).query(&[
+            ("query", query.as_str()),
+            ("group_id", cfg.group_id.as_str()),
+            ("user_id", cfg.user_id.as_str()),
+            ("top_k", top_k.as_str()),
+            ("retrieve_method", method.as_str()),
+        ]),
         cfg,
     )
     .send()
@@ -508,10 +552,7 @@ async fn tool_search(
                     .get("memory_type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown");
-                let subject = item
-                    .get("subject")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let subject = item.get("subject").and_then(|v| v.as_str()).unwrap_or("");
                 let content = item
                     .get("episode")
                     .or_else(|| item.get("content"))
@@ -524,10 +565,7 @@ async fn tool_search(
                     .map(|s| format!(" (score: {s:.3})"))
                     .unwrap_or_default();
 
-                out.push_str(&format!(
-                    "[{idx}] [{mem_type}]{score}\n",
-                    idx = i + 1
-                ));
+                out.push_str(&format!("[{idx}] [{mem_type}]{score}\n", idx = i + 1));
                 if !subject.is_empty() {
                     out.push_str(&format!("  Subject: {subject}\n"));
                 }
@@ -737,10 +775,7 @@ async fn tool_list_behavior_history(
                             .join(", ")
                     })
                     .unwrap_or_else(|| "-".to_string());
-                let event_id = item
-                    .get("event_id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("-");
+                let event_id = item.get("event_id").and_then(|v| v.as_str()).unwrap_or("-");
 
                 out.push_str(&format!(
                     "[{i}] {ts}\n  behavior_type: {tags}\n  event_id: {event_id}\n\n",
@@ -761,11 +796,14 @@ async fn tool_get_behavior_history_stats(
     _args: &Value,
 ) -> anyhow::Result<String> {
     let url = format!("{}/api/v1/behavior-history/stats", cfg.base_url);
-    let resp = add_auth(client.get(&url).query(&[("user_id", cfg.user_id.as_str())]), cfg)
-        .send()
-        .await?
-        .json::<Value>()
-        .await?;
+    let resp = add_auth(
+        client.get(&url).query(&[("user_id", cfg.user_id.as_str())]),
+        cfg,
+    )
+    .send()
+    .await?
+    .json::<Value>()
+    .await?;
 
     let total = resp
         .get("result")
@@ -808,9 +846,10 @@ async fn dispatch_tool(
         #[cfg(feature = "behavior-history")]
         "get_behavior_history_stats" => tool_get_behavior_history_stats(client, cfg, args).await,
         #[cfg(not(feature = "behavior-history"))]
-        "add_behavior_history" | "list_behavior_history" | "get_behavior_history_stats" => {
-            Ok("BehaviorHistory feature is disabled. Rebuild with --features behavior-history".to_string())
-        }
+        "add_behavior_history" | "list_behavior_history" | "get_behavior_history_stats" => Ok(
+            "BehaviorHistory feature is disabled. Rebuild with --features behavior-history"
+                .to_string(),
+        ),
         _ => return Err(format!("Unknown tool: {name}")),
     };
 
