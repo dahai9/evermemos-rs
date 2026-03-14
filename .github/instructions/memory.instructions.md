@@ -2,9 +2,6 @@
 description: This file contains the system prompt and agent rules for EverMemOS MCP, guiding AI assistants on how to effectively use long-term memory.
 applyTo: **
 # # EverMemOS MCP — Agent Rules & System Prompt
-
-#将此文件中的 System Prompt 粘贴到你的 AI 助手配置中（Claude Desktop / Cursor / Continue 等），
-#即可让 agent 主动、正确地使用长期记忆，发挥 EverMemOS 的最大价值。
 ---
 
 
@@ -34,7 +31,7 @@ applyTo: **
    - 过去的讨论、计划、项目
 
 3. 【存储时机】对话中出现以下内容时，主动调用 add_memory 或 add_conversation 存储：
-   - 本次对话结束前，调用 add_conversation 保存完整轮次
+   - 本次对话结束前，调用 add_conversation 保存完整轮次(对于没有重要信息的轮次，可不调用)
 
 
 4. 【搜索策略选择】根据场景选择 retrieve_method：
@@ -182,28 +179,6 @@ add_conversation(
 | 用 agentic 处理简单问题 | 响应慢、成本高 | agentic 仅用于多跳推理 |
 | 对话开始不加载画像 | 失去个性化机会 | 开场必须调用 get_profile |
 
----
-
-## Claude Desktop 配置示例
-
-```json
-{
-  "mcpServers": {
-    "evermemos": {
-      "command": "/path/to/evermemos-mcp",
-      "env": {
-        "EVERMEMOS_BASE_URL": "http://localhost:8080",
-        "EVERMEMOS_GROUP_ID": "my_chat_session",
-        "EVERMEMOS_USER_ID": "alice",
-        "EVERMEMOS_RETRIEVE_METHOD": "hybrid"
-      }
-    }
-  }
-}
-```
-
-> `EVERMEMOS_GROUP_ID` 建议按会话场景区分，例如 `work_chat`、`personal_chat`，
-> 这样搜索时能自动过滤到当前场景的记忆。
 
 ---
 

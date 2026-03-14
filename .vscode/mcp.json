@@ -7,7 +7,7 @@
 			"version": "1.0.0"
 		},
 		"evermemos": {
-			"command": "/home/dahai003/.cargo/target/release/evermemos-mcp",
+			"command": "~/.cargo/bin/evermemos-mcp",
 			"env": {
 				"EVERMEMOS_BASE_URL": "http://localhost:8080",
 				"EVERMEMOS_GROUP_ID": "my_chat",

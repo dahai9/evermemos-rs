@@ -2,6 +2,27 @@
 
 > 将此文件中的 System Prompt 粘贴到你的 AI 助手配置中（Claude Desktop / Cursor / Continue 等），
 > 即可让 agent 主动、正确地使用长期记忆，发挥 EverMemOS 的最大价值。
+## MCP 配置示例
+
+```json
+{
+  "mcpServers": {
+    "evermemos": {
+      "command": "/path/to/evermemos-mcp",
+      "env": {
+        "EVERMEMOS_BASE_URL": "http://localhost:8080",
+        "EVERMEMOS_GROUP_ID": "my_chat_session",
+        "EVERMEMOS_USER_ID": "alice",
+        "EVERMEMOS_RETRIEVE_METHOD": "hybrid"
+      }
+    }
+  }
+}
+```
+
+> `EVERMEMOS_GROUP_ID` 建议按会话场景区分，例如 `work_chat`、`personal_chat`，
+> 这样搜索时能自动过滤到当前场景的记忆。
+
 
 ---
 
@@ -245,28 +266,7 @@ add_conversation(
 
 ---
 
-## Claude Desktop 配置示例
 
-```json
-{
-  "mcpServers": {
-    "evermemos": {
-      "command": "/path/to/evermemos-mcp",
-      "env": {
-        "EVERMEMOS_BASE_URL": "http://localhost:8080",
-        "EVERMEMOS_GROUP_ID": "my_chat_session",
-        "EVERMEMOS_USER_ID": "alice",
-        "EVERMEMOS_RETRIEVE_METHOD": "hybrid"
-      }
-    }
-  }
-}
-```
-
-> `EVERMEMOS_GROUP_ID` 建议按会话场景区分，例如 `work_chat`、`personal_chat`，
-> 这样搜索时能自动过滤到当前场景的记忆。
-
----
 
 ## 评分参考
 
