@@ -26,6 +26,28 @@ export class EverMemOSError extends Error {
   }
 }
 
+function mergeHeaders(
+  baseHeaders: Record<string, string>,
+  overrideHeaders?: HeadersInit,
+): Record<string, string> {
+  const merged = new Headers();
+  for (const [key, value] of Object.entries(baseHeaders)) {
+    merged.set(key, value);
+  }
+  if (overrideHeaders) {
+    const overrides = new Headers(overrideHeaders);
+    overrides.forEach((value, key) => {
+      merged.set(key, value);
+    });
+  }
+
+  const result: Record<string, string> = {};
+  merged.forEach((value, key) => {
+    result[key] = value;
+  });
+  return result;
+}
+
 export class EverMemOSClient {
   private readonly baseUrl: string;
   private readonly orgId: string;
@@ -153,18 +175,26 @@ export class EverMemOSClient {
     init: RequestInit,
     unwrapEnvelope = true,
   ): Promise<T> {
+    const baseHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Organization-Id": this.orgId,
+      ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+    };
+
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       ...init,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Organization-Id": this.orgId,
-        ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
-        ...(init.headers ?? {}),
-      },
+      headers: mergeHeaders(baseHeaders, init.headers),
     });
 
     const text = await response.text();
-    const data = text ? (JSON.parse(text) as ApiEnvelope<T> | T) : ({} as T);
+    let data: ApiEnvelope<T> | T = {} as T;
+    if (text) {
+      try {
+        data = JSON.parse(text) as ApiEnvelope<T> | T;
+      } catch {
+        throw new EverMemOSError("EverMemOS returned non-JSON response", text);
+      }
+    }
 
     if (!response.ok) {
       throw new EverMemOSError(`EverMemOS request failed with status ${response.status}`, data);
