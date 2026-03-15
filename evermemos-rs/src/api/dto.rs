@@ -249,3 +249,19 @@ pub struct UpsertCustomProfileResponse {
     pub user_id: String,
     pub message: Option<String>,
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// GET /api/v1/global-user-profile
+// ────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct GetGlobalProfileQuery {
+    pub user_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GlobalProfileResponse {
+    pub user_id: String,
+    pub profile_data: Option<serde_json::Value>,
+    pub life_summary: Option<String>,
+}

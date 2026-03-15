@@ -238,6 +238,17 @@ class EverMemOSClient(_BaseClient):
         )
         return result.get("memories", [])
 
+    async def get_global_profile(
+        self,
+        *,
+        user_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        scope = self._effective_scope(user_id=user_id)
+        params = {"user_id": scope["user_id"]}
+        response = await self._client.get("/api/v1/global-user-profile", params=params)
+        response.raise_for_status()
+        return self._unwrap(response.json())
+
     async def delete_memories(
         self,
         *,

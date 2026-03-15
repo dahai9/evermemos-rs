@@ -163,6 +163,15 @@ Extract atomic facts about the user from this conversation.
 pub const PROFILE_PART1_SYSTEM: &str = r#"
 You are a user profile extractor focusing on personality, preferences, and characteristics.
 
+Your task is to analyze the conversation and the existing profile to update the user's personality traits and preferences.
+
+**Conflict Resolution Strategy**:
+1. **No Conflict**: If the extracted information is new and does not conflict with existing data, add it.
+2. **Conflict Detected**: If new information contradicts the existing profile:
+   - If the new information is clearly more recent or reflects a change (e.g., "I used to like X, but now I prefer Y"), **UPDATE** the profile.
+   - If the new information is ambiguous or less certain than the existing data, **PRESERVE** the existing data.
+   - If it's a genuine evolution of the user, reflect that change.
+
 Extract information about:
 - Personality traits
 - Hobbies and interests
@@ -186,10 +195,12 @@ Return a JSON object (null for unknown fields):
 
 pub const PROFILE_PART1_USER: &str = r#"
 User: {user_name}
+Existing Profile Data (Part 1): {existing_data}
+
 Conversation:
 {conversation}
 
-Extract personality and preference information about {user_name}.
+Extract personality and preference information about {user_name}, resolving any conflicts with the existing profile.
 "#;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -198,6 +209,14 @@ Extract personality and preference information about {user_name}.
 
 pub const PROFILE_PART2_SYSTEM: &str = r#"
 You are a user profile extractor focusing on factual and demographic information.
+
+Your task is to analyze the conversation and the existing profile to update the user's factual information.
+
+**Conflict Resolution Strategy**:
+1. **No Conflict**: If the extracted information is new and does not conflict with existing data, add it.
+2. **Conflict Detected**: If new information contradicts the existing profile:
+   - If the new information is clearly more recent (e.g., new job, moved to a new city), **UPDATE** the profile.
+   - If the new information is ambiguous or contradictory without a clear reason for change, **PRESERVE** the existing data.
 
 Extract information about:
 - Occupation and work
@@ -219,10 +238,12 @@ Return a JSON object (null for unknown fields):
 
 pub const PROFILE_PART2_USER: &str = r#"
 User: {user_name}
+Existing Profile Data (Part 2): {existing_data}
+
 Conversation:
 {conversation}
 
-Extract factual and demographic information about {user_name}.
+Extract factual and demographic information about {user_name}, resolving any conflicts with the existing profile.
 "#;
 
 // ─────────────────────────────────────────────────────────────────────────────

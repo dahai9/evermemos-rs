@@ -19,11 +19,28 @@ impl MemCellRepo {
         let rid = Uuid::new_v4().to_string();
         let created: Option<MemCell> = self
             .db
-            .create(("memcell", rid))
+            .create(("memcell", rid.clone()))
             .content(cell)
             .await
             .map_err(|e| anyhow::anyhow!("SurrealDB memcell insert error: {e:#}"))?;
-        created.context("Insert returned no record")
+        
+        let record = created.context("Insert returned no record")?;
+
+        // Graph Relation: user -> produced -> memcell
+        if let Some(user_id) = &record.user_id {
+            // Ensure user node exists (using record ID for simplicity)
+            let _ = self.db.query("UPSERT type::thing('user', $user_id) SET user_id = $user_id")
+                .bind(("user_id", user_id.clone()))
+                .await;
+
+            // RELATE user -> produced -> memcell
+            let _ = self.db.query("RELATE type::thing('user', $user_id) -> produced -> type::thing('memcell', $rid)")
+                .bind(("user_id", user_id.clone()))
+                .bind(("rid", rid))
+                .await;
+        }
+
+        Ok(record)
     }
 
     pub async fn soft_delete(&self, id: &str) -> Result<()> {

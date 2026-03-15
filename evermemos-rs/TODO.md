@@ -8,8 +8,8 @@ This file tracks the future directions and improvements for the Rust implementat
 - [ ] **Encrypted Storage**: Leverage SurrealDB's security features to ensure data-at-rest encryption for sensitive personal memories.
 
 ## 🧠 Memory "Metabolism" & Intelligence
-- [ ] **Conflict Resolution Mechanism**: Identify and handle contradictory memories (e.g., changing preferences over time).
-- [ ] **Dynamic Profile Updates**: Automatically evolve `user_profile` based on new conversational evidence.
+- [x] **Conflict Resolution Mechanism**: Identify and handle contradictory memories (e.g., changing preferences over time).
+- [x] **Dynamic Profile Updates**: Automatically evolve `user_profile` based on new conversational evidence.
 - [ ] **Spatiotemporal Graphs**: Utilize SurrealDB's graph capabilities to link memories with "When" (Timeline) and "Where" (Location context).
 
 ## ❄️ NixOS & Infrastructure

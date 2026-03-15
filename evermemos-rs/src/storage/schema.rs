@@ -146,12 +146,13 @@ DEFINE INDEX IF NOT EXISTS idx_el_vec
 -- user_profile — user characteristics
 -- ─────────────────────────────────────────────────────────────────────────────
 DEFINE TABLE IF NOT EXISTS user_profile SCHEMAFULL;
-DEFINE FIELD IF NOT EXISTS user_id       ON user_profile TYPE string;
-DEFINE FIELD IF NOT EXISTS profile_data  ON user_profile TYPE option<object>;
-DEFINE FIELD IF NOT EXISTS life_summary  ON user_profile TYPE option<string>;
-DEFINE FIELD IF NOT EXISTS is_deleted    ON user_profile TYPE bool DEFAULT false;
-DEFINE FIELD IF NOT EXISTS created_at    ON user_profile TYPE any DEFAULT time::now();
-DEFINE FIELD IF NOT EXISTS updated_at    ON user_profile TYPE any DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS user_id              ON user_profile TYPE string;
+DEFINE FIELD IF NOT EXISTS profile_data         ON user_profile TYPE option<object> FLEXIBLE;
+DEFINE FIELD IF NOT EXISTS custom_profile_data  ON user_profile TYPE option<object> FLEXIBLE;
+DEFINE FIELD IF NOT EXISTS life_summary         ON user_profile TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS is_deleted           ON user_profile TYPE bool DEFAULT false;
+DEFINE FIELD IF NOT EXISTS created_at           ON user_profile TYPE any DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS updated_at           ON user_profile TYPE any DEFAULT time::now();
 
 DEFINE INDEX IF NOT EXISTS idx_up_user ON user_profile FIELDS user_id UNIQUE;
 
@@ -208,7 +209,7 @@ DEFINE TABLE IF NOT EXISTS memory_request_log SCHEMAFULL;
 DEFINE FIELD IF NOT EXISTS message_id   ON memory_request_log TYPE string;
 DEFINE FIELD IF NOT EXISTS user_id      ON memory_request_log TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS group_id     ON memory_request_log TYPE option<string>;
-DEFINE FIELD IF NOT EXISTS payload      ON memory_request_log TYPE object;
+DEFINE FIELD IF NOT EXISTS payload      ON memory_request_log TYPE object FLEXIBLE;
 -- sync_status: -1=pending, 0=processing, 1=done, -2=error
 DEFINE FIELD IF NOT EXISTS sync_status  ON memory_request_log TYPE int DEFAULT -1;
 DEFINE FIELD IF NOT EXISTS created_at   ON memory_request_log TYPE any DEFAULT time::now();
@@ -227,8 +228,8 @@ DEFINE FIELD IF NOT EXISTS timestamp      ON behavior_history TYPE any;
 -- behavior_type: array of tags e.g. ["chat", "follow-up"]
 DEFINE FIELD IF NOT EXISTS behavior_type  ON behavior_history TYPE array<string>;
 DEFINE FIELD IF NOT EXISTS event_id       ON behavior_history TYPE option<string>;
-DEFINE FIELD IF NOT EXISTS meta           ON behavior_history TYPE option<object>;
-DEFINE FIELD IF NOT EXISTS extend         ON behavior_history TYPE option<object>;
+DEFINE FIELD IF NOT EXISTS meta           ON behavior_history TYPE option<object> FLEXIBLE;
+DEFINE FIELD IF NOT EXISTS extend         ON behavior_history TYPE option<object> FLEXIBLE;
 DEFINE FIELD IF NOT EXISTS is_deleted     ON behavior_history TYPE bool DEFAULT false;
 DEFINE FIELD IF NOT EXISTS created_at     ON behavior_history TYPE any DEFAULT time::now();
 DEFINE FIELD IF NOT EXISTS updated_at     ON behavior_history TYPE any DEFAULT time::now();
@@ -238,6 +239,32 @@ DEFINE INDEX IF NOT EXISTS idx_bh_ts        ON behavior_history FIELDS timestamp
 DEFINE INDEX IF NOT EXISTS idx_bh_type      ON behavior_history FIELDS behavior_type;
 DEFINE INDEX IF NOT EXISTS idx_bh_event     ON behavior_history FIELDS event_id;
 DEFINE INDEX IF NOT EXISTS idx_bh_user_ts   ON behavior_history FIELDS user_id, timestamp;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Graph Relations (Spatiotemporal Graphs)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- user table (nodes)
+DEFINE TABLE IF NOT EXISTS user SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS user_id ON user TYPE string;
+DEFINE INDEX IF NOT EXISTS idx_user_id ON user FIELDS user_id UNIQUE;
+
+-- location table (nodes)
+DEFINE TABLE IF NOT EXISTS location SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS name ON location TYPE string;
+DEFINE FIELD IF NOT EXISTS coords ON location TYPE option<geometry<point>>;
+DEFINE INDEX IF NOT EXISTS idx_location_name ON location FIELDS name UNIQUE;
+
+-- experienced relation: user -> experienced -> episodic_memory
+DEFINE TABLE IF NOT EXISTS experienced TYPE RELATION;
+DEFINE FIELD IF NOT EXISTS timestamp ON experienced TYPE any DEFAULT time::now();
+
+-- produced relation: memcell -> produced -> (episodic_memory | foresight_record | event_log_record)
+DEFINE TABLE IF NOT EXISTS produced TYPE RELATION;
+
+-- located_at relation: (episodic_memory | user) -> located_at -> location
+DEFINE TABLE IF NOT EXISTS located_at TYPE RELATION;
+DEFINE FIELD IF NOT EXISTS timestamp ON located_at TYPE any DEFAULT time::now();
 
 "#;
 

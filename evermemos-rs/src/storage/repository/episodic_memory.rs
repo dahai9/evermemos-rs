@@ -28,12 +28,39 @@ impl EpisodicMemoryRepo {
         let rid = Uuid::new_v4().to_string();
         let created: Option<EpisodicMemory> = self
             .db
-            .create(("episodic_memory", rid))
+            .create(("episodic_memory", rid.clone()))
             .content(mem)
             .await
             .context("Failed to insert episodic_memory")?;
 
-        created.context("Insert returned no record")
+        let record = created.context("Insert returned no record")?;
+
+        // Graph Relation: user -> experienced -> episodic_memory
+        if let Some(user_id) = &record.user_id {
+            // Ensure user node exists
+            let _ = self.db.query("UPSERT type::thing('user', $user_id) SET user_id = $user_id")
+                .bind(("user_id", user_id.clone()))
+                .await;
+
+            // RELATE user -> experienced -> episodic_memory
+            let _ = self.db.query("RELATE type::thing('user', $user_id) -> experienced -> type::thing('episodic_memory', $rid) SET timestamp = $ts")
+                .bind(("user_id", user_id.clone()))
+                .bind(("rid", rid.clone()))
+                .bind(("ts", record.timestamp.clone()))
+                .await;
+        }
+
+        // Graph Relation: memcell -> produced -> episodic_memory
+        if let Some(memcell_ids) = &record.memcell_ids {
+            for cell_id in memcell_ids {
+                let _ = self.db.query("RELATE type::thing('memcell', $cell_id) -> produced -> type::thing('episodic_memory', $rid)")
+                    .bind(("cell_id", cell_id.clone()))
+                    .bind(("rid", rid.clone()))
+                    .await;
+            }
+        }
+
+        Ok(record)
     }
 
     /// Update an existing EpisodicMemory by its SurrealDB record ID.

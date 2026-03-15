@@ -59,20 +59,50 @@ pub trait LlmProvider: Send + Sync {
 }
 
 /// Free function: complete and deserialize JSON — works with `Arc<dyn LlmProvider>`.
-/// Strips markdown code fences if the model wraps the JSON in them.
+/// Smartly extracts JSON block if the model wraps it in markdown or adds conversational filler.
 pub async fn complete_json<T: for<'de> Deserialize<'de>>(
     llm: &dyn LlmProvider,
     messages: Vec<LlmMessage>,
     temperature: f32,
 ) -> Result<T> {
     let raw = llm.complete(messages, temperature, None).await?;
-    let cleaned = raw
-        .trim()
-        .trim_start_matches("```json")
-        .trim_start_matches("```")
-        .trim_end_matches("```")
-        .trim();
-    Ok(serde_json::from_str(cleaned)?)
+    
+    // Find the first '{' or '[' and the last '}' or ']'
+    let start_obj = raw.find('{');
+    let start_arr = raw.find('[');
+    let start = match (start_obj, start_arr) {
+        (Some(o), Some(a)) => Some(o.min(a)),
+        (Some(o), None) => Some(o),
+        (None, Some(a)) => Some(a),
+        (None, None) => None,
+    };
+
+    let end_obj = raw.rfind('}');
+    let end_arr = raw.rfind(']');
+    let end = match (end_obj, end_arr) {
+        (Some(o), Some(a)) => Some(o.max(a)),
+        (Some(o), None) => Some(o),
+        (None, Some(a)) => Some(a),
+        (None, None) => None,
+    };
+
+    let cleaned = if let (Some(s), Some(e)) = (start, end) {
+        if s <= e {
+            &raw[s..=e]
+        } else {
+            &raw
+        }
+    } else {
+        &raw
+    };
+
+    match serde_json::from_str(cleaned) {
+        Ok(parsed) => Ok(parsed),
+        Err(e) => {
+            tracing::error!("Failed to parse JSON. Error: {}. Raw output:\n{}", e, raw);
+            Err(e.into())
+        }
+    }
 }
 
 #[cfg(test)]

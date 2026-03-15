@@ -21,11 +21,29 @@ impl ForesightRepo {
         let rid = Uuid::new_v4().to_string();
         let created: Option<ForesightRecord> = self
             .db
-            .create(("foresight_record", rid))
+            .create(("foresight_record", rid.clone()))
             .content(rec)
             .await
             .context("Failed to insert foresight_record")?;
-        created.context("Insert returned no record")
+        
+        let record = created.context("Insert returned no record")?;
+
+        // Graph Relation: user -> experienced -> foresight_record
+        if let Some(user_id) = &record.user_id {
+            // Ensure user node exists
+            let _ = self.db.query("UPSERT type::thing('user', $user_id) SET user_id = $user_id")
+                .bind(("user_id", user_id.clone()))
+                .await;
+
+            // RELATE user -> experienced -> foresight_record
+            let _ = self.db.query("RELATE type::thing('user', $user_id) -> experienced -> type::thing('foresight_record', $rid) SET timestamp = $ts")
+                .bind(("user_id", user_id.clone()))
+                .bind(("rid", rid))
+                .bind(("ts", record.timestamp.clone()))
+                .await;
+        }
+
+        Ok(record)
     }
 
     pub async fn soft_delete(&self, id: &str) -> Result<()> {

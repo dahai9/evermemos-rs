@@ -183,8 +183,9 @@ impl MemoryManager {
                     .await
                 {
                     Ok(profile) => {
-                        if let Err(e) = self.up_repo.upsert(profile).await {
-                            warn!("Failed to upsert profile: {e}");
+                        match self.up_repo.upsert(profile).await {
+                            Ok(_) => debug!("Saved user_profile for user={uid}"),
+                            Err(e) => warn!("Failed to upsert profile: {e}"),
                         }
                     }
                     Err(e) => warn!("Profile extraction failed: {e}"),
