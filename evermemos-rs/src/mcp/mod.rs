@@ -6,7 +6,7 @@
 //!
 //! # Architecture
 //!
-//! ```
+//! ```text
 //! Claude Desktop ──stdio──▶ evermemos-mcp binary
 //!                                  │
 //!                          HTTP API calls

@@ -198,3 +198,99 @@ impl ProfileExtractor {
         Ok(resp.life_summary)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use serde_json::json;
+    use std::sync::Arc;
+
+    struct MockLlm {
+        part1_response: String,
+        part2_response: String,
+        life_summary_response: String,
+    }
+
+    #[async_trait]
+    impl LlmProvider for MockLlm {
+        async fn complete(
+            &self,
+            messages: Vec<LlmMessage>,
+            _temperature: f32,
+            _max_tokens: Option<u32>,
+        ) -> Result<String> {
+            let sys = messages
+                .iter()
+                .find(|m| m.role == crate::llm::provider::LlmRole::System)
+                .unwrap();
+            
+            if sys.content.contains("personality, preferences") {
+                Ok(self.part1_response.clone())
+            } else if sys.content.contains("factual and demographic") {
+                Ok(self.part2_response.clone())
+            } else {
+                Ok(self.life_summary_response.clone())
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_initial_extraction() {
+        let mock = MockLlm {
+            part1_response: r#"{"interests":["reading"]}"#.to_string(),
+            part2_response: r#"{"location":"NY"}"#.to_string(),
+            life_summary_response: r#"{"life_summary":"Lives in NY, loves reading."}"#.to_string(),
+        };
+
+        let extractor = ProfileExtractor::new(Arc::new(mock));
+        let profile = extractor
+            .extract(&[], "user_1", "Alice", None)
+            .await
+            .unwrap();
+
+        let pd = profile.profile_data.unwrap();
+        assert_eq!(pd.get("interests").unwrap()[0], "reading");
+        assert_eq!(pd.get("location").unwrap(), "NY");
+        assert_eq!(profile.life_summary.unwrap(), "Lives in NY, loves reading.");
+    }
+
+    #[tokio::test]
+    async fn test_metabolism_update() {
+        // Prepare an existing profile
+        let existing = UserProfile {
+            id: None,
+            user_id: "user_1".to_string(),
+            profile_data: Some(json!({
+                "interests": ["reading"],
+                "location": "NY",
+                "old_hobby": "stamps" // ensure old keys not overwritten are preserved
+            })),
+            life_summary: Some("Lives in NY, loves reading.".to_string()),
+            custom_profile_data: None,
+            is_deleted: false,
+            created_at: None,
+            updated_at: None,
+        };
+
+        // Mock returns an updated hobby and new location (e.g. they moved and started hiking)
+        let mock = MockLlm {
+            part1_response: r#"{"interests":["hiking"]}"#.to_string(),
+            part2_response: r#"{"location":"SF"}"#.to_string(),
+            life_summary_response: r#"{"life_summary":"Moved to SF, loves hiking."}"#.to_string(),
+        };
+
+        let extractor = ProfileExtractor::new(Arc::new(mock));
+        let profile = extractor
+            .extract(&[], "user_1", "Alice", Some(&existing))
+            .await
+            .unwrap();
+
+        let pd = profile.profile_data.unwrap();
+        // The new extraction returns "hiking", which overrides "reading" because of how `serde_json::Map::extend` works.
+        assert_eq!(pd.get("interests").unwrap()[0], "hiking");
+        assert_eq!(pd.get("location").unwrap(), "SF");
+        assert_eq!(pd.get("old_hobby").unwrap(), "stamps"); // Preserved
+        assert_eq!(profile.life_summary.unwrap(), "Moved to SF, loves hiking.");
+    }
+}
